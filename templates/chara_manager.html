@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title data-i18n="character.manager">角色管理 - Project N.E.K.O.</title>
+    <!-- i18next 加载器（统一处理 CDN 加载和初始化） -->
+    <script src="/static/i18n-i18next.js"></script>
+    <script src="/static/common_dialogs.js"></script>
+    <link rel="stylesheet" href="/static/css/chara_manager.css">
+    <link rel="stylesheet" href="/static/css/dark-mode.css">
+    <link rel="stylesheet" href="/static/css/tutorial-styles.css">
+    <script src="/static/theme-manager.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="container-header">
+            <h2 data-i18n="character.manager" data-text="Character Manager">角色管理</h2>
+            <button type="button" class="close-btn" id="close-chara-manager-btn" data-i18n-title="common.close" aria-label="关闭">
+                <img src="/static/icons/close_button.png" data-i18n-alt="common.close">
+            </button>
+        </div>
+        <div class="section" id="master-section">
+            <div class="master-section-header">
+                
+                <div class="header-tips-container">
+                    <img src="/static/icons/exclamation.png" alt="" class="exclamation-icon">
+                    
+                    <div class="tips" data-i18n="character.masterProfile">
+                        主人档案(唯一):档案名为必填项,其他均为可选项。
+                    </div>
+                </div>
+        
+                <button type="button" class="btn sm api-key-btn" id="api-key-settings-btn" aria-label="API Key">
+                    <img src="/static/icons/key.png" alt="" class="key-icon"> <span data-i18n="character.apiKeySettings">API Key</span>
+                </button>
+            </div>
+            <div class="master-card">
+                <div class="master-card-body">
+                    <form id="master-form">
+                        <div class="field-row-wrapper">
+                            <label><span data-i18n="character.profileName">档案名</span><span class="required-star"
+                                    data-i18n="character.required">*</span></label>
+                            <div class="field-row">
+                                <input type="text" name="档案名" required maxlength="20" autocomplete="off">
+                            </div>
+                            </div>
+                            <!-- 性别、昵称等其他字段由 chara_manager.js 根据 characters.json 数据动态渲染 -->
+                        </form>
+                    </div>
+                </div>
+            </div>
+            <div class="section" id="catgirl-section">
+                <div class="catgirl-section-header">
+                    <img src="/static/icons/exclamation.png" alt="" class="exclamation-icon">
+                    <span data-i18n="character.catgirlProfile" class="tips">猫娘档案:进阶设定包含Live2D形象、语音ID等。</span>
+                </div>
+                <div id="catgirl-list"></div>
+                <div id="hidden-catgirl-area" style="display: none;">
+                    <button type="button" class="hidden-catgirl-header" aria-controls="hidden-catgirl-list" aria-expanded="false">
+                        <span class="hidden-catgirl-arrow" aria-hidden="true">▶</span>
+                        <span id="hidden-catgirl-count" data-i18n="character.hiddenCatgirls">已隐藏猫娘</span>
+                    </button>
+                    <div id="hidden-catgirl-list"></div>
+                </div>
+                <button type="button" class="btn add sm" id="add-catgirl-btn" aria-label="新增猫娘">
+                    <img src="/static/icons/add.png" alt="" class="add-icon">
+                    <span data-i18n="character.addCatgirl">新增猫娘</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="/static/js/reserved_fields_utils.js"></script>
+    <script src="/static/js/chara_manager.js"></script>
+
+    <!-- Driver.js 库 -->
+    <script src="/static/libs/driver.min.js"></script>
+    <link rel="stylesheet" href="/static/libs/driver.min.css">
+
+    <!-- 通用教程管理器 -->
+    <script src="/static/universal-tutorial-manager.js"></script>
+
+    <!-- 初始化由 chara_manager.js 负责（避免 CSP 内联脚本限制） -->
+</body>
+
+</html>

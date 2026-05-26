@@ -1,0 +1,24 @@
+[plugin]
+name = "网络搜索"
+description = "联网搜索。自动根据用户 IP 选择搜索引擎（国内百度/海外DuckDuckGo），无需 API Key。"
+version = "0.1.0"
+id = "web_search"
+entry = "plugin.plugins.web_search:WebSearchPlugin"
+
+[plugin.author]
+name = "N.E.K.O Team"
+
+[plugin.sdk]
+recommended = ">=0.1.0,<0.2.0"
+supported = ">=0.1.0,<0.3.0"
+
+[plugin_runtime]
+enabled = true
+auto_start = true
+
+[plugin.store]
+enabled = false
+
+[search]
+max_results = 8
+timeout_seconds = 15

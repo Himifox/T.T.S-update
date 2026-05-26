@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <link rel="apple-touch-icon" href="/static/neko_192.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta charset="UTF-8">
+    <title data-i18n="app.title">Project N.E.K.O.</title>
+    <!-- i18next 加载器（统一处理 CDN 加载和初始化） -->
+    <script src="/static/i18n-i18next.js"></script>
+    <script src="/static/common_dialogs.js"></script>
+    <link rel="stylesheet" href="/static/css/index.css">
+    <!-- 暗色模式样式 -->
+    <link rel="stylesheet" href="/static/css/dark-mode.css">
+    <!-- 主题管理器（尽早加载以避免闪烁） -->
+    <script src="/static/theme-manager.js"></script>
+
+    <!-- Driver.js 新手引导库 (本地实现 - 无需 CDN) -->
+    <script src="/static/libs/driver.min.js"></script>
+    <link rel="stylesheet" href="/static/libs/driver.min.css">
+    <!-- 教程样式定制 -->
+    <link rel="stylesheet" href="/static/css/tutorial-styles.css">
+    <!-- APlayer 库（本地） -->
+    <link rel="stylesheet" href="/static/libs/APlayer.min.css">
+    <script src="/static/libs/APlayer.min.js"></script>
+</head>
+
+<body>
+
+    <!-- 旧的按钮面板已迁移到浮动按钮系统（live2d.js），保留隐藏的旧按钮元素供功能触发使用 -->
+    <div id="sidebar" style="display: none;">
+        <div id="sidebarbox">
+            <button id="micButton" class="side-btn" data-i18n="voiceControl.startVoice">🎤 开始语音</button>
+            <button id="muteButton" class="side-btn" disabled data-i18n="voiceControl.rest">⏸️ 休息一下</button>
+            <button id="screenButton" class="side-btn" disabled data-i18n="voiceControl.screenShare">🖥️ 屏幕共享</button>
+            <button id="stopButton" class="side-btn" disabled data-i18n="voiceControl.stopShare">🛑 停止共享</button>
+            <button id="resetSessionButton" class="side-btn" data-i18n="voiceControl.leave">👋 请她离开</button>
+            <button id="returnSessionButton" class="side-btn" data-i18n="voiceControl.return">🫴 请她回来</button>
+            <div id="status"></div>
+        </div>
+    </div>
+
+    <!-- Status 气泡框 -->
+    <div id="status-toast"></div>
+    <div id="chat-container">
+        <div id="chat-header">
+            <img src="/static/icons/chat_icon.png" data-i18n-alt="chat.title" alt="对话" style="width: 28px; height: 28px; object-fit: contain; margin-right: 6px; vertical-align: middle; image-rendering: -webkit-optimize-contrast; image-rendering: crisp-edges;">
+            <span id="chat-title" data-i18n="chat.title">对话</span>
+        </div>
+        <button id="toggle-chat-btn" data-i18n-title="common.minimize" title="最小化"><img
+                src='/static/icons/expand_icon_off.png' alt="最小化" data-i18n-alt="common.minimize"
+                width="32" height="32"
+                style="object-fit: cover; pointer-events: none;"></button>
+        <div id="chat-tooltip" data-i18n="chat.tooltip">✨ 对话区</div>
+        <div id="chat-content-wrapper">
+            <div id="chatContainer"></div>
+        </div>
+        <div id="text-input-area">
+            <div id="screenshot-thumbnail-container">
+                <div id="screenshots-header">
+                    <span id="screenshots-title" data-i18n="chat.screenshotsTitle">📸 待发送截图</span><span
+                        id="screenshot-count-wrapper"> (<span id="screenshot-count">0</span>)</span>
+                    <button id="clear-all-screenshots" data-i18n="chat.clearAll">清空全部</button>
+                </div>
+                <div id="screenshots-list">
+                    <!-- 截图项将动态添加到这里 -->
+                </div>
+            </div>
+            <div id="text-input-row">
+                <textarea id="textInputBox" data-i18n-placeholder="chat.textInputPlaceholder"
+                    placeholder="文字聊天模式...回车发送，Shift+回车换行" tabindex="0"></textarea>
+                <div id="button-group">
+                    <button id="textSendButton"><img src="/static/icons/send_icon.png" alt=""><span
+                            data-i18n="chat.send">发送</span></button>
+                    <button id="screenshotButton"><img src="/static/icons/screenshot_icon.png" alt=""><span
+                            class="desktop-text" data-i18n="chat.screenshot">截图</span><span class="mobile-text"
+                            data-i18n="chat.takePhoto">拍照</span></button>
+                </div>
+            </div>
+        </div>
+        <!-- 字幕提示框现在通过JavaScript动态创建为系统消息，不再需要静态HTML -->
+    </div>
+    <!-- 字幕显示区域 -->
+    <div id="subtitle-display" class="hidden">
+        <span id="subtitle-text"></span>
+        <div id="subtitle-drag-handle">
+            <!-- 四向箭头图标 -->
+            <div id="subtitle-drag-arrows">
+                <svg viewBox="0 0 24 24" fill="white" xmlns="http://www.w3.org/2000/svg">
+                    <!-- 上箭头 -->
+                    <path d="M12 3L8.5 8H10.5V10.5H13.5V8H15.5L12 3Z"/>
+                    <!-- 下箭头 -->
+                    <path d="M12 21L15.5 16H13.5V13.5H10.5V16H8.5L12 21Z"/>
+                    <!-- 左箭头 -->
+                    <path d="M3 12L8 8.5V10.5H10.5V13.5H8V15.5L3 12Z"/>
+                    <!-- 右箭头 -->
+                    <path d="M21 12L16 15.5V13.5H13.5V10.5H16V8.5L21 12Z"/>
+                    <!-- 中心点 -->
+                    <circle cx="12" cy="12" r="1.2"/>
+                </svg>
+            </div>
+        </div>
+    </div>
+    <div id="live2d-container">
+        <canvas id="live2d-canvas"></canvas>
+    </div>
+    <!-- VRM模型容器 -->
+    <div id="vrm-container" style="display: none;">
+        <canvas id="vrm-canvas"></canvas>
+    </div>
+    <!-- MMD模型容器 -->
+    <div id="mmd-container" style="display: none;">
+        <canvas id="mmd-canvas"></canvas>
+    </div>
+
+    <!-- Live2D SDK 核心库 -->
+    <script src="/static/libs/live2dcubismcore.min.js"></script>
+    <!-- Live2D Cubism JS Framework -->
+    <script src="/static/libs/live2d.min.js"></script>
+    <script src="/static/libs/pixi.min.js"></script>
+    <script src="/static/libs/index.min.js"></script>
+    <script src="/static/libs/ogg-opus-decoder.min.js"></script>
+    <script src="/static/live2d-core.js"></script>
+    <script src="/static/live2d-emotion.js"></script>
+    <script src="/static/live2d-model.js"></script>
+    <script src="/static/live2d-interaction.js"></script>
+    <script src="/static/avatar-popup-common.js"></script>
+    <script src="/static/avatar-ui-popup.js"></script>
+    <script src="/static/avatar-ui-popup-config.js"></script>
+    <script src="/static/avatar-ui-buttons.js"></script>
+    <script src="/static/live2d-ui-buttons.js"></script>
+    <script src="/static/common-ui-hud.js"></script>
+    <script src="/static/avatar-ui-drag.js"></script>
+    <script src="/static/live2d-init.js"></script>
+
+    <!-- Three.js 核心库和importmap（用于ES6模块导入）-->
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "/static/libs/three.module.js",
+            "three/addons/": "/static/libs/three/addons/",
+            "@pixiv/three-vrm": "/static/libs/three-vrm.module.min.js",
+            "@pixiv/three-vrm-animation": "/static/libs/three-vrm-animation.module.js",
+            "@moeru/three-mmd": "/static/libs/three-mmd.module.js",
+            "@moeru/three-mmd-physics-ammo": "/static/libs/three-mmd-physics-ammo.module.js?v=23",
+            "ammojs-typed": "/static/libs/ammojs-typed.module.js"
+        }
+    }
+    </script>
+    <!-- 将 THREE 挂载到 window 对象，以便非模块脚本可以使用 -->
+    <script type="module">
+        import * as THREE from 'three';
+        window.THREE = THREE;
+        console.log('[Three.js] ES 模块已加载 (主页)');
+        // 发送自定义事件，通知其他脚本 THREE 已就绪
+        window.dispatchEvent(new CustomEvent('three-ready'));
+    </script>
+
+    <script type="module" src="/static/js/APlayer/main.js"></script>
+    <script src="/static/music_ui.js"></script>
+    <script src="/static/js/index.js"></script>
+    <script src="/static/common_ui.js"></script>
+    <script src="/static/vrm-init.js"></script>
+    <script src="/static/mmd-init.js"></script>
+    <script src="/static/achievement_manager.js"></script>
+    <script src="/static/js/agent_ui_v2.js"></script>
+    <script src="/static/ogg-opus-decoder-wrapper.js"></script>
+
+    <!-- app 解构模块 -->
+    <script src="/static/app-state.js"></script>
+    <script src="/static/app-ui.js"></script>
+    <script src="/static/app-chat.js"></script>
+    <script src="/static/app-audio-playback.js"></script>
+    <script src="/static/app-audio-capture.js"></script>
+    <script src="/static/app-screen.js"></script>
+    <script src="/static/app-interpage.js"></script>
+    <script src="/static/app-proactive.js"></script>
+    <script src="/static/app-settings.js"></script>
+    <script src="/static/app-agent.js"></script>
+    <script src="/static/app-character.js"></script>
+    <script src="/static/app-websocket.js"></script>
+    <script src="/static/app-buttons.js"></script>
+    <script src="/static/app.js"></script>
+
+    <script src="/static/subtitle.js"></script>
+    
+    <script src="/static/touch-config.js"></script>
+    <!-- 通用教程管理器（支持所有页面） -->
+    <script src="/static/universal-tutorial-manager.js"></script>
+    <!-- 注意：初始化由 app.js 统一处理，避免重复初始化 -->
+</body>
+
+</html>

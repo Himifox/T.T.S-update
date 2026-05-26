@@ -1,0 +1,107 @@
+[build-system]
+requires = ["hatchling", "setuptools<70"]
+build-backend = "hatchling.build"
+
+[project]
+name = "N.E.K.O"
+version = "1.0.0"
+description = "N.E.K.O. Desktop"
+readme = "README.MD"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "fastapi~=0.115.9",
+  "websockets~=15.0.1",
+  "soxr~=0.5.0",
+  "numpy~=1.26.4",
+  "websocket-client~=1.8.0",
+  "jinja2",
+  "dashscope==1.25.4",
+  "python-multipart",
+  "pillow",
+  "pyautogui",
+  "backoff",
+  "toml",
+  "openai",
+  "google-genai>=1.56.0",
+  "anthropic",
+  "uvicorn",
+  "pyobjc; sys_platform == 'darwin'",
+  "pytesseract",
+  "pywin32; sys_platform == 'win32'",
+  "pywinauto; sys_platform == 'win32'",
+  "pygetwindow; sys_platform == 'win32'",
+  "pyrnnoise>=0.4.0",
+  "beautifulsoup4>=4.12.0",
+  "bilibili-api-python>=17.4.0",
+  "googletrans>=4.0.2",
+  "translatepy",
+  "tomli>=2.3.0",
+  "tomli-w>=1.2.0",
+  "loguru>=0.7.0",
+  "pyzmq>=27.1.0",
+  "browser-use>=0.11.0",
+  "cryptography>=45.0.6",
+  "python-dotenv>=1.2.1",
+  "requests>=2.32.5",
+  "sqlalchemy>=2.0.0",
+  "qrcode>=8.2",
+  "httpx>=0.28.1",
+  "psutil>=7.0.0",
+  "neteasecloudmusic>=0.1.10",
+  "tornado>=6.5.4",
+  "jmespath>=1.1.0",
+  "regex",
+  "ormsgpack>=1.12.2",
+]
+
+
+[tool.hatch.build.targets.wheel]
+packages = [
+  "brain",
+  "config",
+  "main_logic",
+  "main_routers",
+  "memory",
+  "plugin",
+  "steamworks",
+  "utils",
+]
+exclude = [
+  "plugin/plugins",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "brain",
+  "config",
+  "main_logic",
+  "main_routers",
+  "memory",
+  "plugin",
+  "steamworks",
+  "utils",
+  "static",
+  "templates",
+  "assets",
+  "main_server.py",
+  "memory_server.py",
+  "agent_server.py",
+  "launcher.py",
+  "monitor.py",
+  "README.MD",
+  "LICENSE",
+]
+exclude = [
+  "plugin/plugins",
+]
+
+[dependency-groups]
+dev = [
+    "nest-asyncio>=1.6.0",
+    "playwright>=1.58.0",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-playwright>=0.7.2",
+    "ruff>=0.15.4",
+]
+
