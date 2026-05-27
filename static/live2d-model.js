@@ -1160,6 +1160,9 @@ Live2DManager.prototype._configureLoadedModel = async function(model, modelPath,
         this.modelName = null;
     }
 
+    this._baseMotionState = null;
+    this._activeMotionState = null;
+
     // 配置渲染纹理数量以支持更多蒙版
     if (model.internalModel && model.internalModel.renderer && model.internalModel.renderer._clippingManager) {
         model.internalModel.renderer._clippingManager._renderTextureCount = 3;
@@ -1311,6 +1314,9 @@ Live2DManager.prototype._configureLoadedModel = async function(model, modelPath,
                             if (!this.fileReferences) this.fileReferences = {};
                             if (!this.fileReferences.Motions) this.fileReferences.Motions = {};
                             this.fileReferences.Motions.PreviewAll = filesData.motion_files.map(file => ({ File: file }));
+                            if (typeof this._ensureRuntimeMotionGroup === 'function') {
+                                this._ensureRuntimeMotionGroup('PreviewAll', this.fileReferences.Motions.PreviewAll);
+                            }
                         }
                     }
                 }

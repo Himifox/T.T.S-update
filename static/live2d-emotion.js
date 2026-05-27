@@ -564,139 +564,330 @@ Live2DManager.prototype.playExpression = async function(emotion, specifiedExpres
 };
 
 // 播放动作
-Live2DManager.prototype.playMotion = async function(emotion) {
-    if (!this.currentModel) {
-        console.warn('无法播放动作：模型未加载');
-        return;
+Live2DManager.prototype._normalizeMotionFilePath = function(filePath) {
+    if (!filePath || typeof filePath !== 'string') return '';
+
+    const decodeSafe = (value) => {
+        try { return decodeURIComponent(value); } catch (_) { return value; }
+    };
+    const trimSlashes = (value) => String(value || '').replace(/^\/+|\/+$/g, '');
+
+    let normalized = decodeSafe(String(filePath).trim())
+        .replace(/\\/g, '/')
+        .split(/[?#]/)[0];
+    normalized = normalized.replace(/^https?:\/\/[^/]+/i, '');
+    normalized = trimSlashes(normalized);
+
+    const modelRoot = trimSlashes(decodeSafe(String(this.modelRootPath || '').replace(/\\/g, '/')));
+    if (modelRoot && normalized.startsWith(modelRoot + '/')) {
+        normalized = normalized.slice(modelRoot.length + 1);
     }
 
-    // 优先使用 Cubism 原生 Motion Group（FileReferences.Motions）
-    // 格式: { emotion: [{ File: "motions/xxx.motion3.json" }, ...] }
-    let motions = null;
-    if (this.fileReferences && this.fileReferences.Motions && this.fileReferences.Motions[emotion]) {
-        motions = this.fileReferences.Motions[emotion]; // 形如 [{ File: "motions/xxx.motion3.json" }, ...]
-    } else if (this.emotionMapping && this.emotionMapping.motions && this.emotionMapping.motions[emotion]) {
-        // 兼容 EmotionMapping.motions: { emotion: ["motions/xxx.motion3.json", ...] }
-        const emotionMotions = this.emotionMapping.motions[emotion];
-        if (Array.isArray(emotionMotions) && emotionMotions.length > 0) {
-            // 检查是否已经是对象格式还是字符串格式
-            if (typeof emotionMotions[0] === 'string') {
-                motions = emotionMotions.map(f => ({ File: f }));
-            } else {
-                // 已经是对象格式
-                motions = emotionMotions;
+    return normalized.replace(/^\.\//, '');
+};
+
+Live2DManager.prototype._sameMotionFile = function(a, b) {
+    const left = this._normalizeMotionFilePath(a);
+    const right = this._normalizeMotionFilePath(b);
+    return !!left && !!right && left === right;
+};
+
+Live2DManager.prototype._normalizeMotionEntry = function(item) {
+    if (!item) return null;
+    if (typeof item === 'string') {
+        const file = this._normalizeMotionFilePath(item);
+        return file ? { File: file } : null;
+    }
+    if (typeof item === 'object' && item.File) {
+        const file = this._normalizeMotionFilePath(item.File);
+        return file ? { ...item, File: file } : null;
+    }
+    return null;
+};
+
+Live2DManager.prototype._getEmotionMotionEntries = function(emotion) {
+    const mappingMotions = this.emotionMapping && this.emotionMapping.motions;
+    if (mappingMotions && Object.prototype.hasOwnProperty.call(mappingMotions, emotion)) {
+        const entries = Array.isArray(mappingMotions[emotion]) ? mappingMotions[emotion] : [];
+        return entries.map(item => this._normalizeMotionEntry(item)).filter(Boolean);
+    }
+
+    const fileRefMotions = this.fileReferences && this.fileReferences.Motions;
+    if (fileRefMotions && Object.prototype.hasOwnProperty.call(fileRefMotions, emotion)) {
+        const entries = Array.isArray(fileRefMotions[emotion]) ? fileRefMotions[emotion] : [];
+        return entries.map(item => this._normalizeMotionEntry(item)).filter(Boolean);
+    }
+
+    return [];
+};
+
+Live2DManager.prototype._selectEmotionMotion = function(emotion) {
+    const motions = this._getEmotionMotionEntries(emotion);
+    return motions.length > 0 ? this.getRandomElement(motions) : null;
+};
+
+Live2DManager.prototype._ensureRuntimeMotionGroup = function(groupName, motions) {
+    const internalModel = this.currentModel && this.currentModel.internalModel;
+    const motionManager = internalModel && internalModel.motionManager;
+    if (!internalModel || !motionManager || !groupName || !Array.isArray(motions)) return false;
+
+    const motionList = motions
+        .map(item => this._normalizeMotionEntry(item))
+        .filter(Boolean);
+    if (motionList.length === 0) return false;
+
+    if (!motionManager.definitions) motionManager.definitions = {};
+    motionManager.definitions[groupName] = motionList;
+    if (!motionManager.motionGroups) motionManager.motionGroups = {};
+    if (!Array.isArray(motionManager.motionGroups[groupName])) motionManager.motionGroups[groupName] = [];
+
+    if (!internalModel.settings) internalModel.settings = {};
+    if (!internalModel.settings.motions) internalModel.settings.motions = {};
+    internalModel.settings.motions[groupName] = motionList;
+
+    if (!internalModel.settings.json) internalModel.settings.json = {};
+    if (!internalModel.settings.json.FileReferences) internalModel.settings.json.FileReferences = {};
+    if (!internalModel.settings.json.FileReferences.Motions) internalModel.settings.json.FileReferences.Motions = {};
+    internalModel.settings.json.FileReferences.Motions[groupName] = motionList;
+
+    if (!this.fileReferences) this.fileReferences = {};
+    if (!this.fileReferences.Motions) this.fileReferences.Motions = {};
+    this.fileReferences.Motions[groupName] = motionList;
+    return true;
+};
+
+Live2DManager.prototype._findMotionPlaybackRef = function(filePath, preferredGroup = null, preferredIndex = null) {
+    const target = this._normalizeMotionFilePath(filePath);
+    if (!target) return null;
+
+    const fileRefMotions = this.fileReferences && this.fileReferences.Motions;
+    const motionDefs = this.currentModel?.internalModel?.motionManager?.definitions;
+    const settingsMotions = this.currentModel?.internalModel?.settings?.motions;
+    const sources = [fileRefMotions, motionDefs, settingsMotions].filter(source => source && typeof source === 'object');
+
+    const findInGroup = (source, groupName) => {
+        const list = source && source[groupName];
+        if (!Array.isArray(list)) return null;
+        if (Number.isInteger(preferredIndex) && list[preferredIndex] && this._sameMotionFile(list[preferredIndex].File, target)) {
+            return { groupName, index: preferredIndex, motions: list };
+        }
+        for (let index = 0; index < list.length; index++) {
+            const item = list[index];
+            if (item && this._sameMotionFile(item.File, target)) {
+                return { groupName, index, motions: list };
             }
+        }
+        return null;
+    };
+
+    if (preferredGroup) {
+        for (const source of sources) {
+            const found = findInGroup(source, preferredGroup);
+            if (found) return found;
         }
     }
 
-    if (!motions || motions.length === 0) {
-        console.warn(`未找到情感 ${emotion} 对应的动作，但将保持表情`);
-        // 如果没有找到对应的motion，设置一个短定时器以确保expression能够显示
-        // 并且不设置回调来清除效果，让表情一直持续
-        this.motionTimer = setTimeout(() => {
-            this.motionTimer = null;
-        }, 500); // 500ms应该足够让expression稳定显示
-        return;
+    for (const source of sources) {
+        for (const groupName of Object.keys(source)) {
+            const found = findInGroup(source, groupName);
+            if (found) return found;
+        }
     }
 
-    const choice = this.getRandomElement(motions);
+    return null;
+};
+
+Live2DManager.prototype._getMotionDurationMs = async function(filePath, fallbackMs = 5000) {
+    try {
+        const motionPath = this.resolveAssetPath(filePath);
+        const response = await fetch(motionPath);
+        if (!response.ok) return fallbackMs;
+        const motionData = await response.json();
+        const duration = motionData && motionData.Meta && Number(motionData.Meta.Duration);
+        return Number.isFinite(duration) && duration > 0 ? duration * 1000 : fallbackMs;
+    } catch (_) {
+        return fallbackMs;
+    }
+};
+
+Live2DManager.prototype._setMotionLoopState = function(groupName, index, shouldLoop) {
+    const motionInstance = this.currentModel?.internalModel?.motionManager?.motionGroups?.[groupName]?.[index];
+    if (!motionInstance) return;
+    try {
+        if (typeof motionInstance.setIsLoop === 'function') {
+            motionInstance.setIsLoop(!!shouldLoop);
+        } else if (motionInstance._loop !== undefined) {
+            motionInstance._loop = !!shouldLoop;
+        }
+    } catch (_) {}
+};
+
+Live2DManager.prototype.recordBaseMotion = function(filePath, state = {}) {
+    const normalized = this._normalizeMotionFilePath(filePath);
+    if (!normalized) return false;
+    this._baseMotionState = {
+        file: normalized,
+        rawFile: filePath,
+        groupName: state.groupName || state.group || 'PreviewAll',
+        index: Number.isInteger(state.index) ? state.index : null,
+        priority: Number.isFinite(state.priority) ? state.priority : 3,
+        loop: state.loop !== false
+    };
+    this._activeMotionState = { ...this._baseMotionState, temporary: false };
+    console.log('[Live2D Motion] 已记录基础动态:', this._baseMotionState);
+    return true;
+};
+
+Live2DManager.prototype._isTargetBaseMotion = function(filePath) {
+    return !!this._baseMotionState && this._sameMotionFile(filePath, this._baseMotionState.file);
+};
+
+Live2DManager.prototype._clearMotionTimerOnly = function() {
+    if (!this.motionTimer) return;
+    if (this.motionTimer.type === 'animation') {
+        cancelAnimationFrame(this.motionTimer.id);
+    } else if (this.motionTimer.type === 'timeout') {
+        clearTimeout(this.motionTimer.id);
+    } else if (this.motionTimer.type === 'motion') {
+        try {
+            if (this.motionTimer.id && this.motionTimer.id.stop) {
+                this.motionTimer.id.stop();
+            }
+        } catch (motionError) {
+            console.warn('停止motion失败:', motionError);
+        }
+    } else {
+        clearTimeout(this.motionTimer);
+    }
+    this.motionTimer = null;
+};
+
+Live2DManager.prototype._playMotionFile = async function(motionEntry, options = {}) {
+    if (!this.currentModel || !this.currentModel.motion || !motionEntry || !motionEntry.File) {
+        return null;
+    }
+
+    const file = this._normalizeMotionFilePath(motionEntry.File);
+    if (!file) return null;
+
+    let playback = this._findMotionPlaybackRef(file, options.groupName, options.index);
+    if (!playback) {
+        const groupName = options.groupName || `EmotionHotkey_${String(options.emotion || 'motion').replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+        this._ensureRuntimeMotionGroup(groupName, [{ ...motionEntry, File: file }]);
+        playback = { groupName, index: 0, motions: [{ ...motionEntry, File: file }] };
+    } else {
+        this._ensureRuntimeMotionGroup(playback.groupName, playback.motions);
+    }
+
+    const motionManager = this.currentModel.internalModel && this.currentModel.internalModel.motionManager;
+    if (motionManager && typeof motionManager.loadMotion === 'function') {
+        await motionManager.loadMotion(playback.groupName, playback.index);
+        this._setMotionLoopState(playback.groupName, playback.index, options.loop === true);
+    }
+
+    const priority = Number.isFinite(options.priority) ? options.priority : 3;
+    const motion = await this.currentModel.motion(playback.groupName, playback.index, priority);
+    if (!motion) return null;
+
+    return {
+        motion,
+        file,
+        groupName: playback.groupName,
+        index: playback.index,
+        priority
+    };
+};
+
+Live2DManager.prototype._restoreBaseMotion = async function() {
+    if (!this.currentModel) return false;
+
+    const base = this._baseMotionState;
+    if (base && base.file) {
+        try {
+            const restored = await this._playMotionFile(
+                { File: base.rawFile || base.file },
+                {
+                    groupName: base.groupName,
+                    index: base.index,
+                    priority: base.priority,
+                    loop: base.loop !== false
+                }
+            );
+            if (restored) {
+                this._activeMotionState = { ...base, temporary: false };
+                console.log('[Live2D Motion] 已恢复基础动态:', base.file);
+                return true;
+            }
+        } catch (error) {
+            console.warn('[Live2D Motion] 恢复基础动态失败:', error);
+        }
+    }
+
+    if (typeof this._restoreIdleAnimationAfterTemporaryMotion === 'function') {
+        try {
+            return !!(await this._restoreIdleAnimationAfterTemporaryMotion());
+        } catch (error) {
+            console.warn('[Live2D Motion] 调用主界面待机恢复失败:', error);
+        }
+    }
+    return false;
+};
+
+Live2DManager.prototype.playMotion = async function(emotion, options = {}) {
+    if (!this.currentModel) {
+        console.warn('无法播放动作：模型未加载');
+        return false;
+    }
+
+    const choice = options.motionEntry || this._selectEmotionMotion(emotion);
     if (!choice || !choice.File) {
-        console.warn(`motion配置无效: ${JSON.stringify(choice)}，回退到简单动作`);
-        this.playSimpleMotion(emotion);
-        return;
+        console.warn(`未找到情感 ${emotion} 对应的动作，但将保持表情`);
+        return false;
     }
 
     try {
-        // 清除之前的动作定时器
-        if (this.motionTimer) {
-            console.log('检测到前一个motion正在播放，正在停止...');
+        this._clearMotionTimerOnly();
+        const normalizedFile = this._normalizeMotionFilePath(choice.File);
+        const motionDuration = await this._getMotionDurationMs(normalizedFile, 5000);
+        const playback = await this._playMotionFile(choice, {
+            emotion,
+            priority: Number.isFinite(options.priority) ? options.priority : 3,
+            loop: options.loop === true
+        });
 
-            if (this.motionTimer.type === 'animation') {
-                cancelAnimationFrame(this.motionTimer.id);
-            } else if (this.motionTimer.type === 'timeout') {
-                clearTimeout(this.motionTimer.id);
-            } else if (this.motionTimer.type === 'motion') {
-                // 停止motion播放
-                try {
-                    if (this.motionTimer.id && this.motionTimer.id.stop) {
-                        this.motionTimer.id.stop();
-                    }
-                } catch (motionError) {
-                    console.warn('停止motion失败:', motionError);
-                }
-            } else {
-                clearTimeout(this.motionTimer);
-            }
-            this.motionTimer = null;
-            console.log('前一个motion已停止');
+        if (!playback) {
+            console.warn(`无法播放motion文件: ${choice.File}`);
+            if (options.restoreBase !== false) await this._restoreBaseMotion();
+            return false;
         }
 
-        // 尝试使用Live2D模型的原生motion播放功能
-        try {
-            // 构建完整的motion路径（相对模型根目录）
-            const motionPath = this.resolveAssetPath(choice.File);
-            console.log(`尝试播放motion: ${motionPath}`);
+        this._activeMotionState = {
+            file: playback.file,
+            rawFile: choice.File,
+            groupName: playback.groupName,
+            index: playback.index,
+            priority: playback.priority,
+            temporary: options.temporary !== false
+        };
 
-            // 使用模型的原生motion播放功能
-            if (this.currentModel.motion) {
-                try {
-                    console.log(`尝试播放motion: ${choice.File}`);
+        console.log(`成功播放motion文件: ${playback.file} (${playback.groupName}[${playback.index}])，持续 ${motionDuration}ms`);
 
-                    // 使用情感名称作为motion组名，这样可以确保播放正确的motion
-                    console.log(`尝试使用情感组播放motion: ${emotion}`);
-
-                    const motion = await this.currentModel.motion(emotion);
-
-                    if (motion) {
-                        console.log(`成功开始播放motion（情感组: ${emotion}，预期文件: ${choice.File}）`);
-
-                        // 获取motion的实际持续时间
-                        let motionDuration = 5000; // 默认5秒
-
-                        // 尝试从motion文件获取持续时间
-                        try {
-                            const response = await fetch(motionPath);
-                            if (response.ok) {
-                                const motionData = await response.json();
-                                if (motionData.Meta && motionData.Meta.Duration) {
-                                    motionDuration = motionData.Meta.Duration * 1000;
-                                }
-                            }
-                        } catch (error) {
-                            console.warn('无法获取motion持续时间，使用默认值');
-                        }
-
-                        console.log(`预期motion持续时间: ${motionDuration}ms`);
-
-                        // 设置定时器在motion结束后清理motion参数（但保留expression）
-                        this.motionTimer = setTimeout(() => {
-                            console.log(`motion播放完成（预期文件: ${choice.File}），清除motion参数但保留expression`);
-                            this.motionTimer = null;
-                            this.clearEmotionEffects(); // 只清除motion参数，不清除expression
-                        }, motionDuration);
-
-                        return; // 成功播放，直接返回
-                    } else {
-                        console.warn('motion播放失败，返回值无效');
-                    }
-                } catch (error) {
-                    console.warn('模型motion方法失败:', error);
+        if (options.temporary !== false) {
+            this.motionTimer = setTimeout(async () => {
+                console.log(`临时motion播放完成: ${playback.file}，恢复基础动态`);
+                this.motionTimer = null;
+                this._activeMotionState = null;
+                if (options.restoreBase !== false) {
+                    await this._restoreBaseMotion();
                 }
-            }
-
-            // 如果原生motion播放失败，回退到简单动作
-            console.warn(`无法播放motion: ${choice.File}，回退到简单动作`);
-            this.playSimpleMotion(emotion);
-
-        } catch (error) {
-            console.error('motion播放过程中出错:', error);
-            this.playSimpleMotion(emotion);
+            }, motionDuration);
         }
 
+        return true;
     } catch (error) {
         console.error('播放动作失败:', error);
-        // 回退到简单动作
-        this.playSimpleMotion(emotion);
+        if (options.restoreBase !== false) await this._restoreBaseMotion();
+        return false;
     }
 };
 
@@ -764,7 +955,9 @@ Live2DManager.prototype.playSimpleMotion = function(emotion) {
 };
 
 // 清理当前情感效果（清除motion参数，但保留expression）
-Live2DManager.prototype.clearEmotionEffects = function() {
+Live2DManager.prototype.clearEmotionEffects = function(options = {}) {
+    const stopMotions = options.stopMotions !== false;
+    const resetMotionParams = options.resetMotionParams !== false;
     let hasCleared = false;
     
     console.log('开始清理motion效果（保留expression）...');
@@ -772,32 +965,12 @@ Live2DManager.prototype.clearEmotionEffects = function() {
     // 清除动作定时器
     if (this.motionTimer) {
         console.log(`清除motion定时器，类型: ${this.motionTimer.type || 'unknown'}`);
-        
-        if (this.motionTimer.type === 'animation') {
-            // 取消动画帧
-            cancelAnimationFrame(this.motionTimer.id);
-        } else if (this.motionTimer.type === 'timeout') {
-            // 清除普通定时器
-            clearTimeout(this.motionTimer.id);
-        } else if (this.motionTimer.type === 'motion') {
-            // 停止motion播放
-            try {
-                if (this.motionTimer.id && this.motionTimer.id.stop) {
-                    this.motionTimer.id.stop();
-                }
-            } catch (motionError) {
-                console.warn('停止motion失败:', motionError);
-            }
-        } else {
-            // 兼容旧的定时器格式
-            clearTimeout(this.motionTimer);
-        }
-        this.motionTimer = null;
+        this._clearMotionTimerOnly();
         hasCleared = true;
     }
     
     // 停止所有motion（但不重置expression参数）
-    if (this.currentModel && this.currentModel.internalModel && this.currentModel.internalModel.motionManager) {
+    if (stopMotions && this.currentModel && this.currentModel.internalModel && this.currentModel.internalModel.motionManager) {
         try {
             // 使用官方API停止所有motion
             if (this.currentModel.internalModel.motionManager.stopAllMotions) {
@@ -811,7 +984,7 @@ Live2DManager.prototype.clearEmotionEffects = function() {
     }
     
     // 只重置明显的motion相关参数，保留expression相关参数
-    if (this.currentModel && this.currentModel.internalModel && this.currentModel.internalModel.coreModel) {
+    if (resetMotionParams && this.currentModel && this.currentModel.internalModel && this.currentModel.internalModel.coreModel) {
         try {
             const coreModel = this.currentModel.internalModel.coreModel;
             
@@ -848,7 +1021,7 @@ Live2DManager.prototype.clearEmotionEffects = function() {
         console.warn('重新应用常驻表情失败:', e);
     }
     
-    console.log('motion效果清理完成，motion参数已重置，expression参数已保留');
+    console.log('motion效果清理完成，expression参数已保留');
 };
 
 // 设置情感并播放对应的表情和动作
@@ -889,16 +1062,15 @@ Live2DManager.prototype.setEmotion = async function(emotion) {
     if (expressionFiles.length > 0) {
         targetExpressionFile = this.getRandomElement(expressionFiles);
     }
+
+    const targetMotion = this._selectEmotionMotion(emotion);
+    const targetMotionFile = targetMotion && targetMotion.File ? targetMotion.File : null;
+    const targetIsBaseMotion = !!targetMotionFile && this._isTargetBaseMotion(targetMotionFile);
+    const shouldPlayMotion = !!targetMotionFile && !targetIsBaseMotion;
     
     // 检查是否需要重置：如果情绪和表情都相同，则跳过重置
-    if (this.currentEmotion === emotion && this.currentExpressionFile === targetExpressionFile) {
-        // 相同情绪且相同表情，不触发重置，保留原有的50%概率随机播放动作机制
-        if (Math.random() < 0.5) {
-            console.log(`检测到相同情绪且相同表情: ${emotion} (${targetExpressionFile})，不触发重置，仅随机播放motion`);
-            await this.playMotion(emotion);
-        } else {
-            console.log(`检测到相同情绪且相同表情: ${emotion} (${targetExpressionFile})，不触发重置，跳过播放`);
-        }
+    if (this.currentEmotion === emotion && this.currentExpressionFile === targetExpressionFile && !shouldPlayMotion) {
+        console.log(`检测到相同情绪/表情且无需切换motion: ${emotion} (${targetExpressionFile || '无表情'})，保持当前动态`);
         return;
     }
     
@@ -918,31 +1090,32 @@ Live2DManager.prototype.setEmotion = async function(emotion) {
     try {
         console.log(`开始设置新情感: ${emotion}`);
 
-        // 清理之前的motion效果（按照注释保留expression）
-        this.clearEmotionEffects();
+        if (shouldPlayMotion) {
+            // 只有确实要播放不同 motion 时，才停止当前动态。
+            this.clearEmotionEffects({ stopMotions: true, resetMotionParams: true });
+        } else {
+            if (targetIsBaseMotion) {
+                console.log(`[setEmotion] 目标motion与基础动态相同，保持运行: ${targetMotionFile}`);
+            } else {
+                console.log('[setEmotion] 未配置motion，保持当前动态运行');
+            }
+        }
 
         this.currentEmotion = emotion;
         this.currentExpressionFile = targetExpressionFile;
-        console.log(`情感已更新为: ${emotion}，表情文件: ${targetExpressionFile}`);
-
-        // 暂停idle动画，防止覆盖我们的动作
-        if (this.currentModel && this.currentModel.internalModel && this.currentModel.internalModel.motionManager) {
-            try {
-                // 尝试停止所有正在播放的动作
-                if (this.currentModel.internalModel.motionManager.stopAllMotions) {
-                    this.currentModel.internalModel.motionManager.stopAllMotions();
-                    console.log('已停止idle动画');
-                }
-            } catch (motionError) {
-                console.warn('停止idle动画失败:', motionError);
-            }
-        }
+        console.log(`情感已更新为: ${emotion}，表情文件: ${targetExpressionFile}，motion: ${targetMotionFile || '保持当前'}`);
 
         // 播放表情（使用确定的表情文件以保持一致性）
         await this.playExpression(emotion, targetExpressionFile);
 
-        // 播放动作
-        await this.playMotion(emotion);
+        if (shouldPlayMotion) {
+            await this.playMotion(emotion, {
+                motionEntry: targetMotion,
+                temporary: true,
+                restoreBase: true,
+                loop: false
+            });
+        }
 
         console.log(`情感 ${emotion} 设置完成`);
     } catch (error) {

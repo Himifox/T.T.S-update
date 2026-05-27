@@ -619,7 +619,15 @@
                 }
             }
             motionManager.stopAllMotions();
-            initialModel.motion('PreviewAll', motionIndex, 3);
+            var restoredMotion = await initialModel.motion('PreviewAll', motionIndex, 3);
+            if (restoredMotion && typeof window.live2dManager?.recordBaseMotion === 'function') {
+                window.live2dManager.recordBaseMotion(idleMotion, {
+                    groupName: 'PreviewAll',
+                    index: motionIndex,
+                    priority: 3,
+                    loop: true
+                });
+            }
             console.log('[Live2D Main] Restored idle motion:', idleMotion);
             return true;
         } catch (error) {
