@@ -871,6 +871,9 @@ async def emotion_analysis(request: Request):
             return {"error": "请求体中必须包含text字段"}
         
         text = data['text']
+        logger.info('Emotion analysis disabled; skipping API call')
+        return {'emotion': None, 'confidence': 0, 'disabled': True}
+
         api_key = data.get('api_key')
         model = data.get('model')
         

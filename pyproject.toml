@@ -1,5 +1,5 @@
 [build-system]
-requires = ["hatchling", "setuptools<70"]
+requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
@@ -54,6 +54,10 @@ dependencies = [
   "ormsgpack>=1.12.2",
 ]
 
+[tool.uv]
+cache-dir = ".uv-cache"
+package = false
+
 
 [tool.hatch.build.targets.wheel]
 packages = [
@@ -104,4 +108,3 @@ dev = [
     "pytest-playwright>=0.7.2",
     "ruff>=0.15.4",
 ]
-

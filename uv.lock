@@ -1436,7 +1436,7 @@ wheels = [
 [[package]]
 name = "n-e-k-o"
 version = "1.0.0"
-source = { editable = "." }
+source = { virtual = "." }
 dependencies = [
     { name = "anthropic" },
     { name = "backoff" },

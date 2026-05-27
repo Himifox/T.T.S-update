@@ -116,7 +116,8 @@
      * @returns {Promise<Object|null>}
      */
     mod.analyzeEmotion = async function analyzeEmotion(text) {
-        console.log(window.t('console.analyzeEmotionCalled'), text);
+        console.info('[Emotion] Emotion analysis is disabled; skipping API request.');
+        return null;
         try {
             var response = await fetch('/api/emotion/analysis', {
                 method: 'POST',
