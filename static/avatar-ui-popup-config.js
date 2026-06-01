@@ -14,6 +14,30 @@
 // Live2D（HTML 静态加载时已可用）
 // ═══════════════════════════════════════════════════════
 
+function syncMouseTrackingPopupControls(popup, prefix) {
+    if (!popup || !prefix) return;
+    const syncCheckbox = (cb, checked) => {
+        if (!cb) return;
+        cb.checked = checked;
+        if (typeof cb.updateStyle === 'function') cb.updateStyle();
+    };
+    const syncSensitivity = (slider, valueNode, value) => {
+        if (!slider) return;
+        const clamped = Math.min(Math.max(Number(value) || 1.0, 0.1), 3.0);
+        slider.value = String(clamped);
+        if (valueNode) {
+            valueNode.textContent = `${clamped.toFixed(1)}x`;
+            valueNode.title = valueNode.textContent;
+        }
+    };
+    syncCheckbox(popup.querySelector(`#${prefix}-mouse-tracking-toggle`), window.mouseTrackingEnabled);
+    syncSensitivity(
+        popup.querySelector(`#${prefix}-mouse-tracking-sensitivity`),
+        popup.querySelector(`#${prefix}-mouse-tracking-sensitivity-value`),
+        window.mouseTrackingSensitivity
+    );
+}
+
 if (typeof Live2DManager !== 'undefined') {
     AvatarPopupMixin.apply(Live2DManager.prototype, 'live2d', {
         animationDurationMs: AVATAR_POPUP_ANIMATION_DURATION_MS,
@@ -31,6 +55,12 @@ if (typeof Live2DManager !== 'undefined') {
         },
         getMouseTrackingState: function() {
             return window.mouseTrackingEnabled !== false;
+        },
+        overrides: {
+            _onPopupShow: function(popup, buttonId) {
+                if (buttonId !== 'settings') return;
+                syncMouseTrackingPopupControls(popup, 'live2d');
+            }
         }
     });
 }
@@ -73,11 +103,11 @@ const _vrmPopupConfig = {
                 if (typeof cb.updateStyle === 'function') cb.updateStyle();
             };
             const prefix = 'vrm';
+            syncMouseTrackingPopupControls(popup, prefix);
             syncCheckbox(document.querySelector(`#${prefix}-merge-messages`), window.mergeMessagesEnabled);
             syncCheckbox(document.querySelector(`#${prefix}-focus-mode`), !window.focusModeEnabled);
             syncCheckbox(popup.querySelector(`#${prefix}-proactive-chat`), window.proactiveChatEnabled);
             syncCheckbox(popup.querySelector(`#${prefix}-proactive-vision`), window.proactiveVisionEnabled);
-            syncCheckbox(popup.querySelector(`#${prefix}-mouse-tracking-toggle`), window.mouseTrackingEnabled);
             if (window.CHAT_MODE_CONFIG) {
                 window.CHAT_MODE_CONFIG.forEach(config => {
                     const cb = document.querySelector(`#${prefix}-proactive-${config.mode}-chat`);
@@ -157,6 +187,7 @@ const _mmdPopupConfig = {
         width: 'max-content'
     },
     onMouseTrackingToggle: function(enabled) {
+        window.mouseTrackingEnabled = enabled;
         if (this.cursorFollow) {
             this.cursorFollow.setEnabled(enabled);
         }
@@ -164,6 +195,12 @@ const _mmdPopupConfig = {
     },
     getMouseTrackingState: function() {
         return this.cursorFollow ? this.cursorFollow.enabled : false;
+    },
+    overrides: {
+        _onPopupShow: function(popup, buttonId) {
+            if (buttonId !== 'settings') return;
+            syncMouseTrackingPopupControls(popup, 'mmd');
+        }
     }
 };
 

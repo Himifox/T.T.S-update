@@ -1453,7 +1453,8 @@
             "frameRateLow": "30fps",
             "frameRateMedium": "45fps",
             "frameRateHigh": "60fps",
-            "mouseTracking": "跟蹤滑鼠"
+            "mouseTracking": "跟蹤滑鼠",
+            "mouseTrackingSensitivity": "靈敏度"
         }
     },
     "subtitle": {

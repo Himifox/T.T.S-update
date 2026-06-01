@@ -20,7 +20,7 @@
 
     /**
      * 获取对话相关设置（仅包含需要同步到服务器的设置）
-     * 注意：不包含 renderQuality、targetFrameRate、mouseTrackingEnabled 等性能/外观设置
+     * 注意：不包含 renderQuality、targetFrameRate 等性能/外观设置
      */
     function getConversationSettings() {
         const settings = {
@@ -35,7 +35,9 @@
             focusModeEnabled: S.focusModeEnabled,
             proactiveChatInterval: S.proactiveChatInterval,
             proactiveVisionInterval: S.proactiveVisionInterval,
-            subtitleEnabled: S.subtitleEnabled
+            subtitleEnabled: S.subtitleEnabled,
+            mouseTrackingEnabled: S.mouseTrackingEnabled,
+            mouseTrackingSensitivity: S.mouseTrackingSensitivity
         };
         // 只有在 S 上存在 userLanguage 属性时才包含（含 null，支持显式清除语义）
         if ('userLanguage' in S) {
@@ -178,7 +180,13 @@
             : S.targetFrameRate;
         const currentMouseTracking = typeof window.mouseTrackingEnabled !== 'undefined'
             ? window.mouseTrackingEnabled
-            : true;
+            : S.mouseTrackingEnabled;
+        const rawMouseTrackingSensitivity = typeof window.mouseTrackingSensitivity !== 'undefined'
+            ? window.mouseTrackingSensitivity
+            : S.mouseTrackingSensitivity;
+        const currentMouseTrackingSensitivity = Number.isFinite(Number(rawMouseTrackingSensitivity))
+            ? Math.min(Math.max(Number(rawMouseTrackingSensitivity), 0.1), 3.0)
+            : C.DEFAULT_MOUSE_TRACKING_SENSITIVITY;
 
         // 读取字幕设置（从 S 读取，因为 subtitle.js 会写入 S）
         const currentSubtitleEnabled = typeof S.subtitleEnabled !== 'undefined' ? S.subtitleEnabled : (localStorage.getItem('subtitleEnabled') === 'true');
@@ -200,6 +208,7 @@
             renderQuality: currentRenderQuality,
             targetFrameRate: currentTargetFrameRate,
             mouseTrackingEnabled: currentMouseTracking,
+            mouseTrackingSensitivity: currentMouseTrackingSensitivity,
             subtitleEnabled: currentSubtitleEnabled,
             userLanguage: currentUserLanguage
         };
@@ -227,6 +236,8 @@
         S.proactiveVisionInterval = currentProactiveVisionInterval;
         S.renderQuality = currentRenderQuality;
         S.targetFrameRate = currentTargetFrameRate;
+        S.mouseTrackingEnabled = currentMouseTracking;
+        S.mouseTrackingSensitivity = currentMouseTrackingSensitivity;
         // 同步字幕设置到共享状态
         S.subtitleEnabled = currentSubtitleEnabled;
         S.userLanguage = currentUserLanguage;
@@ -311,6 +322,13 @@
                 } else {
                     window.mouseTrackingEnabled = true;
                 }
+                if (typeof settings.mouseTrackingSensitivity === 'number' && Number.isFinite(settings.mouseTrackingSensitivity)) {
+                    window.mouseTrackingSensitivity = Math.min(Math.max(settings.mouseTrackingSensitivity, 0.1), 3.0);
+                } else if (typeof settings.mouseTrackingSensitivity === 'string' && Number.isFinite(Number(settings.mouseTrackingSensitivity))) {
+                    window.mouseTrackingSensitivity = Math.min(Math.max(Number(settings.mouseTrackingSensitivity), 0.1), 3.0);
+                } else {
+                    window.mouseTrackingSensitivity = C.DEFAULT_MOUSE_TRACKING_SENSITIVITY;
+                }
 
                 console.log('已加载设置:', {
                     proactiveChatEnabled: S.proactiveChatEnabled,
@@ -335,6 +353,7 @@
                 console.log('未找到保存的设置，使用默认值');
                 window.cursorFollowPerformanceLevel = U.mapRenderQualityToFollowPerf(S.renderQuality);
                 window.mouseTrackingEnabled = true;
+                window.mouseTrackingSensitivity = C.DEFAULT_MOUSE_TRACKING_SENSITIVITY;
 
                 // 持久化首次启动设置，避免每次重新检测
                 saveSettings();
@@ -345,6 +364,7 @@
             // 出错时也要确保全局变量被初始化
             window.cursorFollowPerformanceLevel = U.mapRenderQualityToFollowPerf(S.renderQuality);
             window.mouseTrackingEnabled = true;
+            window.mouseTrackingSensitivity = C.DEFAULT_MOUSE_TRACKING_SENSITIVITY;
         }
 
         // 以下逻辑不依赖本地 JSON 解析结果，始终执行
@@ -386,6 +406,8 @@
                         window.proactiveMusicEnabled = S.proactiveMusicEnabled;
                         window.mergeMessagesEnabled = S.mergeMessagesEnabled;
                         window.focusModeEnabled = S.focusModeEnabled;
+                        window.mouseTrackingEnabled = S.mouseTrackingEnabled;
+                        window.mouseTrackingSensitivity = S.mouseTrackingSensitivity;
                         window.proactiveChatInterval = S.proactiveChatInterval;
                         window.proactiveVisionInterval = S.proactiveVisionInterval;
                         // 同步回 localStorage

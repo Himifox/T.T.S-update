@@ -703,7 +703,8 @@ function createAnimationSettingsSidePanel(manager, prefix) {
     container.style.flexDirection = 'column';
     container.style.alignItems = 'stretch';
     container.style.gap = '8px';
-    container.style.width = '168px';
+    container.style.width = '280px';
+    container.style.maxWidth = 'min(320px, calc(100vw - 24px))';
     container.style.minWidth = '0';
     container.style.padding = '10px 14px';
 
@@ -846,9 +847,13 @@ function createAnimationSettingsSidePanel(manager, prefix) {
         const enabled = !checkbox.checked;
         checkbox.checked = enabled;
         updateRowStyle();
-        if (typeof window.saveNEKOSettings === 'function') window.saveNEKOSettings();
+        window.mouseTrackingEnabled = enabled;
         if (typeof manager._onMouseTrackingToggle === 'function') {
             manager._onMouseTrackingToggle(enabled);
+        }
+        if (typeof window.saveNEKOSettings === 'function') window.saveNEKOSettings();
+        if (window.appSettings && typeof window.appSettings.syncSettingsToServer === 'function') {
+            window.appSettings.syncSettingsToServer();
         }
     };
 
@@ -871,6 +876,71 @@ function createAnimationSettingsSidePanel(manager, prefix) {
     });
 
     container.appendChild(trackingRow);
+
+    // Mouse tracking sensitivity slider
+    const sensitivityRow = document.createElement('div');
+    Object.assign(sensitivityRow.style, { display: 'flex', alignItems: 'center', gap: '8px', width: '100%', marginTop: '2px' });
+
+    const sensitivityLabel = document.createElement('span');
+    sensitivityLabel.textContent = window.t ? window.t('settings.toggles.mouseTrackingSensitivity') : '灵敏度';
+    sensitivityLabel.setAttribute('data-i18n', 'settings.toggles.mouseTrackingSensitivity');
+    sensitivityLabel.title = sensitivityLabel.textContent;
+    Object.assign(sensitivityLabel.style, {
+        userSelect: 'none',
+        fontSize: '12px',
+        flex: '0 0 72px',
+        minWidth: '0',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap'
+    });
+
+    const sensitivitySlider = document.createElement('input');
+    sensitivitySlider.type = 'range';
+    sensitivitySlider.id = `${prefix}-mouse-tracking-sensitivity`;
+    sensitivitySlider.min = '0.1';
+    sensitivitySlider.max = '3.0';
+    sensitivitySlider.step = '0.1';
+    const defaultSensitivity = window.appConst && typeof window.appConst.DEFAULT_MOUSE_TRACKING_SENSITIVITY === 'number'
+        ? window.appConst.DEFAULT_MOUSE_TRACKING_SENSITIVITY
+        : 1.0;
+    const currentSensitivity = Number.isFinite(Number(window.mouseTrackingSensitivity))
+        ? Math.min(Math.max(Number(window.mouseTrackingSensitivity), 0.1), 3.0)
+        : defaultSensitivity;
+    sensitivitySlider.value = String(currentSensitivity);
+    Object.assign(sensitivitySlider.style, SLIDER_STYLE);
+    sensitivitySlider.style.minWidth = '120px';
+
+    const sensitivityValue = document.createElement('span');
+    sensitivityValue.id = `${prefix}-mouse-tracking-sensitivity-value`;
+    sensitivityValue.textContent = `${currentSensitivity.toFixed(1)}x`;
+    Object.assign(sensitivityValue.style, VALUE_STYLE);
+
+    const updateSensitivityValue = () => {
+        const value = parseFloat(sensitivitySlider.value);
+        sensitivityValue.textContent = `${value.toFixed(1)}x`;
+        sensitivityValue.title = sensitivityValue.textContent;
+    };
+    updateSensitivityValue();
+
+    sensitivitySlider.addEventListener('input', updateSensitivityValue);
+    sensitivitySlider.addEventListener('change', () => {
+        const value = Math.min(Math.max(parseFloat(sensitivitySlider.value) || defaultSensitivity, 0.1), 3.0);
+        sensitivitySlider.value = String(value);
+        sensitivityValue.textContent = `${value.toFixed(1)}x`;
+        window.mouseTrackingSensitivity = value;
+        if (typeof window.saveNEKOSettings === 'function') window.saveNEKOSettings();
+        if (window.appSettings && typeof window.appSettings.syncSettingsToServer === 'function') {
+            window.appSettings.syncSettingsToServer();
+        }
+    });
+    sensitivitySlider.addEventListener('click', (e) => e.stopPropagation());
+    sensitivitySlider.addEventListener('mousedown', (e) => e.stopPropagation());
+
+    sensitivityRow.appendChild(sensitivityLabel);
+    sensitivityRow.appendChild(sensitivitySlider);
+    sensitivityRow.appendChild(sensitivityValue);
+    container.appendChild(sensitivityRow);
 
     document.body.appendChild(container);
     return container;

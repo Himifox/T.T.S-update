@@ -14,6 +14,7 @@
         DEFAULT_SPEAKER_VOLUME: 100,         // 扬声器默认音量
         DEFAULT_PROACTIVE_CHAT_INTERVAL: 30, // 默认搭话间隔 (秒)
         DEFAULT_PROACTIVE_VISION_INTERVAL: 15, // 默认视觉间隔 (秒)
+        DEFAULT_MOUSE_TRACKING_SENSITIVITY: 1.0,
         MAX_SCREENSHOT_WIDTH: 1280,
         MAX_SCREENSHOT_HEIGHT: 720,
         VOICE_TRANSCRIPT_MERGE_WINDOW: 3000, // 语音转录合并时间窗 (ms)
@@ -110,6 +111,8 @@
         focusModeEnabled: false,
         renderQuality: 'medium',
         targetFrameRate: 60,
+        mouseTrackingEnabled: true,
+        mouseTrackingSensitivity: 1.0,
         screenshotCounter: 0,
         statusToastTimeout: null,
         _statusToastPriority: 0,
@@ -151,7 +154,7 @@
         'proactiveNewsChatEnabled', 'proactiveVideoChatEnabled', 'proactivePersonalChatEnabled',
         'proactiveMusicEnabled', 'proactiveMemeEnabled', 'mergeMessagesEnabled', 'focusModeEnabled',
         'proactiveChatInterval', 'proactiveVisionInterval',
-        'renderQuality', 'targetFrameRate', 'isRecording',
+        'renderQuality', 'targetFrameRate', 'mouseTrackingEnabled', 'mouseTrackingSensitivity', 'isRecording',
     ];
 
     proactiveKeys.forEach(function (key) {

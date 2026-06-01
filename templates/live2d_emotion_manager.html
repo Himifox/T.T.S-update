@@ -468,6 +468,25 @@
             gap: var(--spacing-sm);
         }
 
+        .emotion-header-title {
+            flex: 1;
+        }
+
+        .custom-emotion-remove {
+            border: none;
+            background: transparent;
+            color: var(--color-error);
+            cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
+            padding: 4px 8px;
+            border-radius: 999px;
+        }
+
+        .custom-emotion-remove:hover {
+            background: rgba(255, 82, 82, 0.12);
+        }
+
         .emotion-header::before {
             content: '';
             width: 4px;
@@ -489,6 +508,36 @@
             color: var(--color-text-muted);
             font-size: 13px;
             margin-bottom: 6px;
+        }
+
+        .custom-emotion-controls {
+            display: flex;
+            gap: var(--spacing-md);
+            margin-bottom: var(--spacing-xl);
+        }
+
+        .custom-emotion-controls input {
+            flex: 1;
+            min-width: 0;
+            padding: 12px 16px;
+            background: white;
+            border: 2px solid var(--color-n-border);
+            border-radius: var(--radius-capsule);
+            color: var(--color-text-dark);
+            font-size: 14px;
+            outline: none;
+        }
+
+        .custom-emotion-controls input:focus {
+            border-color: var(--color-n-main);
+            box-shadow: 0 0 0 3px rgba(64, 197, 241, 0.16);
+        }
+
+        .custom-emotion-controls .btn {
+            flex: 0 0 auto;
+            min-width: 120px;
+            padding: 12px 18px;
+            font-size: 14px;
         }
 
         .button-group {
@@ -606,6 +655,14 @@
             .button-group {
                 flex-direction: column;
             }
+
+            .custom-emotion-controls {
+                flex-direction: column;
+            }
+
+            .custom-emotion-controls .btn {
+                width: 100%;
+            }
         }
     </style>
 
@@ -642,6 +699,13 @@
             </div>
 
             <div id="emotion-config" style="display: none;">
+            <div class="custom-emotion-controls">
+                <input id="custom-emotion-input" type="text" maxlength="40" placeholder="输入自定义情绪名称">
+                <button id="add-custom-emotion-btn" class="btn btn-secondary" type="button">增加选项</button>
+            </div>
+
+            <div id="custom-emotion-list"></div>
+
             <!-- Happy -->
             <div class="emotion-section">
                 <div class="emotion-header" data-i18n="emotionManager.emotions.happy">开心 (Happy)</div>
@@ -820,8 +884,12 @@
         const saveBtn = document.getElementById('save-btn');
         const resetBtn = document.getElementById('reset-btn');
         const statusMessage = document.getElementById('status-message');
+        const customEmotionInput = document.getElementById('custom-emotion-input');
+        const addCustomEmotionBtn = document.getElementById('add-custom-emotion-btn');
+        const customEmotionList = document.getElementById('custom-emotion-list');
 
-        const emotions = ['happy', 'sad', 'angry', 'neutral', 'surprised', 'Idle'];
+        const defaultEmotions = ['happy', 'sad', 'angry', 'neutral', 'surprised', 'Idle'];
+        const customEmotions = [];
         let currentModelInfo = null;
         let availableMotions = [];
         let availableExpressions = [];
@@ -928,6 +996,151 @@
                     resolve();
                 }, timeoutMs);
             });
+        }
+
+        function getAllEmotions() {
+            return [...defaultEmotions, ...customEmotions];
+        }
+
+        function getEmotionSelect(selector, emotion) {
+            return Array.from(document.querySelectorAll(selector)).find(el => el.dataset.emotion === emotion) || null;
+        }
+
+        function getHotkeyInput(emotion) {
+            return Array.from(document.querySelectorAll('.hotkey-input')).find(input => (
+                input.dataset.hotkeyEmotion === emotion || input.id === `hotkey-${emotion}`
+            )) || null;
+        }
+
+        function normalizeCustomEmotionName(value) {
+            return String(value || '').trim().replace(/\s+/g, ' ');
+        }
+
+        function hasEmotion(emotion) {
+            return getAllEmotions().some(item => item.toLowerCase() === emotion.toLowerCase());
+        }
+
+        function removeCustomEmotion(emotion) {
+            const index = customEmotions.indexOf(emotion);
+            if (index >= 0) customEmotions.splice(index, 1);
+            const section = Array.from(customEmotionList.querySelectorAll('.emotion-section')).find(el => el.dataset.emotion === emotion);
+            if (section) section.remove();
+        }
+
+        function clearCustomEmotionSections() {
+            customEmotions.splice(0, customEmotions.length);
+            customEmotionList.innerHTML = '';
+        }
+
+        function createCustomEmotionSection(emotion) {
+            const section = document.createElement('div');
+            section.className = 'emotion-section';
+            section.dataset.emotion = emotion;
+            section.dataset.customEmotion = 'true';
+
+            const header = document.createElement('div');
+            header.className = 'emotion-header';
+
+            const title = document.createElement('span');
+            title.className = 'emotion-header-title';
+            title.textContent = emotion;
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'custom-emotion-remove';
+            removeBtn.textContent = '×';
+            removeBtn.title = t('common.delete', '删除');
+            removeBtn.addEventListener('click', () => removeCustomEmotion(emotion));
+
+            header.appendChild(title);
+            header.appendChild(removeBtn);
+
+            section.appendChild(header);
+            section.appendChild(createEmotionSelectGroup(emotion, 'motion'));
+            section.appendChild(createEmotionSelectGroup(emotion, 'expression'));
+            section.appendChild(createHotkeyGroup(emotion));
+
+            return section;
+        }
+
+        function createEmotionSelectGroup(emotion, type) {
+            const group = document.createElement('div');
+            group.className = 'select-group';
+
+            const label = document.createElement('label');
+            label.textContent = type === 'motion' ? t('emotionManager.motion') : t('emotionManager.expression');
+
+            const multiselect = document.createElement('div');
+            multiselect.className = `custom-multiselect emotion-${type}-select`;
+            multiselect.dataset.emotion = emotion;
+
+            const header = document.createElement('div');
+            header.className = 'multiselect-header';
+            header.setAttribute('tabindex', '0');
+            header.setAttribute('role', 'button');
+            header.setAttribute('aria-haspopup', 'listbox');
+            header.setAttribute('aria-expanded', 'false');
+
+            const selectedText = document.createElement('span');
+            selectedText.className = 'selected-text';
+            selectedText.textContent = type === 'motion' ? t('emotionManager.selectMotion') : t('emotionManager.selectExpression');
+
+            const options = document.createElement('div');
+            options.className = 'multiselect-options';
+
+            header.appendChild(selectedText);
+            multiselect.appendChild(header);
+            multiselect.appendChild(options);
+            group.appendChild(label);
+            group.appendChild(multiselect);
+            return group;
+        }
+
+        function createHotkeyGroup(emotion) {
+            const group = document.createElement('div');
+            group.className = 'select-group';
+
+            const label = document.createElement('label');
+            label.textContent = '快捷键 (Hotkey)';
+
+            const input = document.createElement('input');
+            input.className = 'hotkey-input';
+            input.maxLength = 1;
+            input.placeholder = '输入单个按键';
+            input.style.cssText = 'width:80px;padding:4px 8px;border:1px solid #ccc;border-radius:4px;';
+            input.dataset.hotkeyEmotion = emotion;
+
+            group.appendChild(label);
+            group.appendChild(input);
+            return group;
+        }
+
+        function addCustomEmotion(emotion, options = {}) {
+            const normalized = normalizeCustomEmotionName(emotion);
+            if (!normalized) {
+                if (!options.silent) showStatus('请输入自定义情绪名称', 'error');
+                return false;
+            }
+            if (hasEmotion(normalized)) {
+                if (!options.silent) showStatus('该情绪已存在', 'error');
+                return false;
+            }
+
+            customEmotions.push(normalized);
+            customEmotionList.appendChild(createCustomEmotionSection(normalized));
+            populateSelects();
+            if (!options.silent) showStatus('已增加自定义选项', 'success');
+            return true;
+        }
+
+        function getConfigEmotions(config) {
+            const result = new Set();
+            ['motions', 'expressions', 'hotkeys'].forEach(key => {
+                if (config && config[key] && typeof config[key] === 'object') {
+                    Object.keys(config[key]).forEach(emotion => result.add(emotion));
+                }
+            });
+            return Array.from(result);
         }
 
         // 显示状态消息
@@ -1086,6 +1299,7 @@
                     availableExpressions = Array.isArray(data.expression_refs)
                         ? data.expression_refs.filter(ref => ref && ref.file && ref.exists !== false && ref.ambiguous !== true).map(ref => ref.file)
                         : (data.expression_files || []);
+                    clearCustomEmotionSections();
                     populateSelects();
                     emotionConfig.style.display = 'block';
                     return true;
@@ -1171,9 +1385,11 @@
 
         // 填充下拉菜单
         function populateSelects() {
-            emotions.forEach(emotion => {
-                const motionContainer = document.querySelector(`.emotion-motion-select[data-emotion="${emotion}"] .multiselect-options`);
-                const expressionContainer = document.querySelector(`.emotion-expression-select[data-emotion="${emotion}"] .multiselect-options`);
+            getAllEmotions().forEach(emotion => {
+                const motionMS = getEmotionSelect('.emotion-motion-select', emotion);
+                const expressionMS = getEmotionSelect('.emotion-expression-select', emotion);
+                const motionContainer = motionMS ? motionMS.querySelector('.multiselect-options') : null;
+                const expressionContainer = expressionMS ? expressionMS.querySelector('.multiselect-options') : null;
 
                 if (motionContainer) {
                     motionContainer.innerHTML = '';
@@ -1210,7 +1426,7 @@
                     // 初始化头部
                     updateMultiselectHeader(motionContainer.closest('.custom-multiselect'));
                     // 绑定点击事件到 header
-                    const header = motionContainer.closest('.custom-multiselect').querySelector('.multiselect-header');
+                    const header = motionMS.querySelector('.multiselect-header');
                     header.onclick = toggleDropdown;
                     header.onkeydown = (e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
@@ -1255,7 +1471,7 @@
                     // 初始化头部
                     updateMultiselectHeader(expressionContainer.closest('.custom-multiselect'));
                     // 绑定点击事件到 header
-                    const header = expressionContainer.closest('.custom-multiselect').querySelector('.multiselect-header');
+                    const header = expressionMS.querySelector('.multiselect-header');
                     header.onclick = toggleDropdown;
                     header.onkeydown = (e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
@@ -1277,13 +1493,18 @@
                     const config = data.config;
 
                     const serverHotkeys = config.hotkeys || {};
+                    getConfigEmotions(config).forEach(emotion => {
+                        if (!defaultEmotions.includes(emotion) && !hasEmotion(emotion)) {
+                            addCustomEmotion(emotion, { silent: true });
+                        }
+                    });
 
-                    emotions.forEach(emotion => {
-                        const motionMS = document.querySelector(`.emotion-motion-select[data-emotion="${emotion}"]`);
-                        const expressionMS = document.querySelector(`.emotion-expression-select[data-emotion="${emotion}"]`);
+                    getAllEmotions().forEach(emotion => {
+                        const motionMS = getEmotionSelect('.emotion-motion-select', emotion);
+                        const expressionMS = getEmotionSelect('.emotion-expression-select', emotion);
 
                         // 填充快捷键
-                        const hotkeyInput = document.getElementById(`hotkey-${emotion}`);
+                        const hotkeyInput = getHotkeyInput(emotion);
                         if (hotkeyInput) {
                             hotkeyInput.value = serverHotkeys[emotion] || '';
                         }
@@ -1366,9 +1587,9 @@
                 hotkeys: {}
             };
 
-            emotions.forEach(emotion => {
-                const motionMS = document.querySelector(`.emotion-motion-select[data-emotion="${emotion}"]`);
-                const expressionMS = document.querySelector(`.emotion-expression-select[data-emotion="${emotion}"]`);
+            getAllEmotions().forEach(emotion => {
+                const motionMS = getEmotionSelect('.emotion-motion-select', emotion);
+                const expressionMS = getEmotionSelect('.emotion-expression-select', emotion);
 
                 if (motionMS) {
                     const selected = Array.from(motionMS.querySelectorAll('input:checked')).map(cb => cb.value);
@@ -1381,7 +1602,7 @@
                 }
 
                 // 收集快捷键配置
-                const hotkeyInput = document.getElementById(`hotkey-${emotion}`);
+                const hotkeyInput = getHotkeyInput(emotion);
                 if (hotkeyInput) {
                     const key = (hotkeyInput.value || '').trim().toLowerCase();
                     if (key) config.hotkeys[emotion] = key;
@@ -1416,11 +1637,26 @@
                 ms.querySelectorAll('input').forEach(cb => cb.checked = false);
                 updateMultiselectHeader(ms);
             });
+            document.querySelectorAll('.hotkey-input').forEach(input => {
+                input.value = '';
+            });
 
             showStatus(t('emotionManager.configReset'), 'info');
         }
 
         // 事件监听
+        addCustomEmotionBtn.addEventListener('click', () => {
+            if (addCustomEmotion(customEmotionInput.value)) {
+                customEmotionInput.value = '';
+                customEmotionInput.focus();
+            }
+        });
+        customEmotionInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                addCustomEmotionBtn.click();
+            }
+        });
         saveBtn.addEventListener('click', saveEmotionMapping);
         resetBtn.addEventListener('click', resetConfig);
 

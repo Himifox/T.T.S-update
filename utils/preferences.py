@@ -275,8 +275,12 @@ _ALLOWED_CONVERSATION_SETTINGS = {
     'proactiveChatEnabled', 'proactiveVisionEnabled', 'proactiveVisionChatEnabled',
     'proactiveNewsChatEnabled', 'proactiveVideoChatEnabled', 'proactivePersonalChatEnabled',
     'proactiveMusicEnabled', 'proactiveMemeEnabled', 'mergeMessagesEnabled', 'focusModeEnabled',
-    'proactiveChatInterval', 'proactiveVisionInterval', 'subtitleEnabled', 'userLanguage'
+    'proactiveChatInterval', 'proactiveVisionInterval', 'subtitleEnabled', 'userLanguage',
+    'mouseTrackingEnabled', 'mouseTrackingSensitivity'
 }
+
+MOUSE_TRACKING_SENSITIVITY_MIN = 0.1
+MOUSE_TRACKING_SENSITIVITY_MAX = 3.0
 
 
 def load_global_conversation_settings() -> Dict[str, Any]:
@@ -347,10 +351,17 @@ def save_global_conversation_settings(settings: Dict[str, Any]) -> bool:
         _BOOL_FIELDS = {
             'proactiveChatEnabled', 'proactiveVisionEnabled', 'proactiveVisionChatEnabled',
             'proactiveNewsChatEnabled', 'proactiveVideoChatEnabled', 'proactivePersonalChatEnabled',
-            'proactiveMusicEnabled', 'mergeMessagesEnabled', 'focusModeEnabled', 'subtitleEnabled'
+            'proactiveMusicEnabled', 'mergeMessagesEnabled', 'focusModeEnabled', 'subtitleEnabled',
+            'mouseTrackingEnabled'
         }
         _INT_INTERVAL_FIELDS = {'proactiveChatInterval', 'proactiveVisionInterval'}
         _STRING_FIELDS = {'userLanguage'}
+        _FLOAT_RANGE_FIELDS = {
+            'mouseTrackingSensitivity': (
+                MOUSE_TRACKING_SENSITIVITY_MIN,
+                MOUSE_TRACKING_SENSITIVITY_MAX,
+            )
+        }
 
         validated = {}
         for k, v in filtered_settings.items():
@@ -363,6 +374,12 @@ def save_global_conversation_settings(settings: Dict[str, Any]) -> bool:
             elif k in _STRING_FIELDS:
                 if isinstance(v, str) and v:
                     validated[k] = v
+            elif k in _FLOAT_RANGE_FIELDS:
+                min_val, max_val = _FLOAT_RANGE_FIELDS[k]
+                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    numeric_value = float(v)
+                    if min_val <= numeric_value <= max_val:
+                        validated[k] = numeric_value
         filtered_settings = validated
 
         # 创建全局对话设置条目（model_path 固定，不可被用户输入篡改）

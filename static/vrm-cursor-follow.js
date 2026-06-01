@@ -402,6 +402,14 @@ class CursorFollowController {
         return this._lastCanvasRect;
     }
 
+    _getMouseTrackingSensitivity() {
+        const raw = Number(window.mouseTrackingSensitivity);
+        if (Number.isFinite(raw)) {
+            return Math.min(Math.max(raw, 0.1), 3.0);
+        }
+        return 1.0;
+    }
+
     // ════════════════════════════════════════════════════════════════
     //  辅助：检测模型实际前方向
     //  基于 VRM 模型版本（由 vrm-core.js detectVRMVersion 从 GLTF
@@ -584,12 +592,13 @@ class CursorFollowController {
                 const horizLen = Math.sqrt(dx * dx + dz * dz);
                 // 屏幕坐标与当前基准存在上下方向差异，这里取反以匹配鼠标直觉
                 const rawPitch = Math.atan2(-dy, Math.max(horizLen, 1e-8));
+                const sensitivity = this._getMouseTrackingSensitivity();
 
                 const maxYaw = this.eyeMaxYawDeg * (Math.PI / 180);
                 const maxPitchUp = this.eyeMaxPitchUpDeg * (Math.PI / 180);
                 const maxPitchDown = this.eyeMaxPitchDownDeg * (Math.PI / 180);
-                const clampedYaw = THREE.MathUtils.clamp(rawYaw, -maxYaw, maxYaw);
-                const clampedPitch = THREE.MathUtils.clamp(rawPitch, -maxPitchDown, maxPitchUp);
+                const clampedYaw = THREE.MathUtils.clamp(rawYaw * sensitivity, -maxYaw, maxYaw);
+                const clampedPitch = THREE.MathUtils.clamp(rawPitch * sensitivity, -maxPitchDown, maxPitchUp);
                 const eyeCenterDeadzoneRad = D.eyeCenterDeadzoneDeg * (Math.PI / 180);
                 const stableYaw = Math.abs(clampedYaw) < eyeCenterDeadzoneRad ? 0 : clampedYaw;
 
@@ -693,10 +702,11 @@ class CursorFollowController {
                 const rawYaw = Math.atan2(-dx, Math.max(dz, 0.001));
                 const horizLen = Math.sqrt(dx * dx + dz * dz);
                 const rawPitch = Math.atan2(dy, Math.max(horizLen, 0.001));
+                const sensitivity = this._getMouseTrackingSensitivity();
 
                 // ── One-Euro 滤波 ──
-                const filteredYaw = this._headFilterYaw.filter(rawYaw, this._elapsedTime);
-                const filteredPitch = this._headFilterPitch.filter(rawPitch, this._elapsedTime);
+                const filteredYaw = this._headFilterYaw.filter(rawYaw * sensitivity, this._elapsedTime);
+                const filteredPitch = this._headFilterPitch.filter(rawPitch * sensitivity, this._elapsedTime);
 
                 // ── Clamp ──
                 const maxYaw = this.headMaxYawDeg * (Math.PI / 180);

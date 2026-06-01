@@ -174,6 +174,14 @@ class MMDCursorFollow {
         return this._lastCanvasRect;
     }
 
+    _getMouseTrackingSensitivity() {
+        const raw = Number(window.mouseTrackingSensitivity);
+        if (Number.isFinite(raw)) {
+            return Math.min(Math.max(raw, 0.1), 3.0);
+        }
+        return 1.0;
+    }
+
     /**
      * 获取头骨（或颈骨）的世界坐标
      */
@@ -263,13 +271,14 @@ class MMDCursorFollow {
             const rawYaw = Math.atan2(dx, dz);
             const horizLen = Math.sqrt(dx * dx + dz * dz);
             const rawPitch = Math.atan2(-dy, Math.max(horizLen, 1e-8));
+            const sensitivity = this._getMouseTrackingSensitivity();
 
             const maxYaw = this.maxYawDeg * (Math.PI / 180);
             const maxPitchUp = this.maxPitchUpDeg * (Math.PI / 180);
             const maxPitchDown = this.maxPitchDownDeg * (Math.PI / 180);
 
-            this._targetYaw = THREE.MathUtils.clamp(rawYaw, -maxYaw, maxYaw);
-            this._targetPitch = THREE.MathUtils.clamp(rawPitch, -maxPitchDown, maxPitchUp);
+            this._targetYaw = THREE.MathUtils.clamp(rawYaw * sensitivity, -maxYaw, maxYaw);
+            this._targetPitch = THREE.MathUtils.clamp(rawPitch * sensitivity, -maxPitchDown, maxPitchUp);
         }
 
         // 平滑插值

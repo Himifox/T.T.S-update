@@ -869,7 +869,14 @@ Live2DManager.prototype.enableMouseTracking = function (model, options = {}) {
                 const isMouseTrackingEnabled = this.isMouseTrackingEnabled ? this.isMouseTrackingEnabled() : (window.mouseTrackingEnabled !== false);
                 if (this.isFocusing) {
                     if (isMouseTrackingEnabled) {
-                        model.focus(pointer.x, pointer.y);
+                        const sensitivity = Number.isFinite(Number(window.mouseTrackingSensitivity))
+                            ? Number(window.mouseTrackingSensitivity)
+                            : 1.0;
+                        const centerX = window.innerWidth / 2;
+                        const centerY = window.innerHeight / 2;
+                        const focusX = centerX + (pointer.x - centerX) * sensitivity;
+                        const focusY = centerY + (pointer.y - centerY) * sensitivity;
+                        model.focus(focusX, focusY);
                     } else {
                         // 鼠标跟踪禁用时，清除 focusController 外部输入
                         // 头部仍可按 updateNaturalMovements（呼吸、轻微摆动等）自主运动，
