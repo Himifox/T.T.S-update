@@ -1216,6 +1216,15 @@ class UniversalTutorialManager {
 
     setElementInteractive(element, enabled) {
         if (!element) return;
+        if (element.id === 'live2d-lock-icon') {
+            element.style.pointerEvents = 'auto';
+            element.style.cursor = 'pointer';
+            element.style.userSelect = 'none';
+            if (element.dataset.tutorialDisabled) {
+                delete element.dataset.tutorialDisabled;
+            }
+            return;
+        }
         if (!this.tutorialInteractionStates.has(element)) {
             this.tutorialInteractionStates.set(element, {
                 pointerEvents: element.style.pointerEvents,
@@ -1709,10 +1718,16 @@ class UniversalTutorialManager {
             };
             console.log('[Tutorial] 已保存浮动工具栏原始样式:', this._floatingButtonsOriginalStyles);
 
-            floatingButtons.style.setProperty('display', 'flex', 'important');
-            floatingButtons.style.setProperty('visibility', 'visible', 'important');
-            floatingButtons.style.setProperty('opacity', '1', 'important');
-            console.log('[Tutorial] 强制显示浮动工具栏');
+            if (window.live2dManager && window.live2dManager.isLocked) {
+                floatingButtons.style.setProperty('display', 'none', 'important');
+                floatingButtons.style.setProperty('visibility', 'hidden', 'important');
+                floatingButtons.style.setProperty('opacity', '0', 'important');
+            } else {
+                floatingButtons.style.setProperty('display', 'flex', 'important');
+                floatingButtons.style.setProperty('visibility', 'visible', 'important');
+                floatingButtons.style.setProperty('opacity', '1', 'important');
+                console.log('[Tutorial] 强制显示浮动工具栏');
+            }
         }
 
         // 立即强制显示锁图标（如果当前页面的引导包含锁图标步骤）
@@ -1739,6 +1754,13 @@ class UniversalTutorialManager {
         this.floatingButtonsProtectionTimer = setInterval(() => {
             const floatingButtons = document.getElementById('live2d-floating-buttons');
             if (floatingButtons && window.isInTutorial) {
+                if (window.live2dManager && window.live2dManager.isLocked) {
+                    floatingButtons.style.setProperty('display', 'none', 'important');
+                    floatingButtons.style.setProperty('visibility', 'hidden', 'important');
+                    floatingButtons.style.setProperty('opacity', '0', 'important');
+                    floatingButtons.style.setProperty('pointer-events', 'none', 'important');
+                    return;
+                }
                 // 强制设置所有可能隐藏浮动按钮的样式
                 floatingButtons.style.setProperty('display', 'flex', 'important');
                 floatingButtons.style.setProperty('visibility', 'visible', 'important');

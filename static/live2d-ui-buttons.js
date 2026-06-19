@@ -60,10 +60,13 @@ Live2DManager.prototype.setupHTMLLockIcon = function(model) {
             this.pixi_app.ticker.remove(this._lockIconTicker);
             this._lockIconTicker = null;
         }
+        if (this._lockIconPositionHandler) {
+            window.removeEventListener('resize', this._lockIconPositionHandler);
+            this._lockIconPositionHandler = null;
+        }
         existingLockIcon.remove();
     }
 
-    // 将锁图标浮在聊天记录区域右下角，独立层，始终可见
     const chatWrapper = document.getElementById('chat-content-wrapper') || document.getElementById('chat-container');
     if (!chatWrapper) {
         this.isLocked = false;
@@ -71,22 +74,16 @@ Live2DManager.prototype.setupHTMLLockIcon = function(model) {
         return;
     }
 
-    // 确保父元素有 position，便于绝对定位
-    if (getComputedStyle(chatWrapper).position === 'static') {
-        chatWrapper.style.position = 'relative';
-    }
-
     const lockIcon = document.createElement('button');
     lockIcon.id = 'live2d-lock-icon';
     Object.assign(lockIcon.style, {
-        position: 'absolute',
-        bottom: '12px',
-        right: '12px',
-        zIndex: '999',
+        position: 'fixed',
+        zIndex: '10001',
         width: '36px',
         height: '36px',
         cursor: 'pointer',
         userSelect: 'none',
+        pointerEvents: 'auto',
         background: 'rgba(255, 255, 255, 0.7)',
         backdropFilter: 'blur(8px)',
         border: '1px solid rgba(0, 0, 0, 0.1)',
@@ -98,6 +95,20 @@ Live2DManager.prototype.setupHTMLLockIcon = function(model) {
         boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
         transition: 'background 0.2s ease, box-shadow 0.2s ease'
     });
+
+    const updateLockIconPosition = () => {
+        const rect = chatWrapper.getBoundingClientRect();
+        const left = Math.max(8, Math.min(rect.right - 48, window.innerWidth - 44));
+        const top = Math.max(8, Math.min(rect.bottom - 48, window.innerHeight - 44));
+        lockIcon.style.left = `${left}px`;
+        lockIcon.style.top = `${top}px`;
+    };
+    updateLockIconPosition();
+    window.addEventListener('resize', updateLockIconPosition);
+    if (this._lockIconPositionHandler) {
+        window.removeEventListener('resize', this._lockIconPositionHandler);
+    }
+    this._lockIconPositionHandler = updateLockIconPosition;
 
     const iconVersion = '?v=' + Date.now();
 
@@ -144,7 +155,7 @@ Live2DManager.prototype.setupHTMLLockIcon = function(model) {
     imgContainer.appendChild(imgUnlocked);
     lockIcon.appendChild(imgContainer);
 
-    chatWrapper.appendChild(lockIcon);
+    document.body.appendChild(lockIcon);
     this._lockIconElement = lockIcon;
     this._lockIconImages = {
         locked: imgLocked,
@@ -561,6 +572,13 @@ Live2DManager.prototype.setupFloatingButtons = function(model) {
     }
 
     this.tutorialProtectionTimer = setInterval(() => {
+        if (this.isLocked) {
+            buttonsContainer.style.setProperty('display', 'none', 'important');
+            buttonsContainer.style.setProperty('visibility', 'hidden', 'important');
+            buttonsContainer.style.setProperty('opacity', '0', 'important');
+            buttonsContainer.style.setProperty('pointer-events', 'none', 'important');
+            return;
+        }
         if (window.isInTutorial === true) {
             const style = window.getComputedStyle(buttonsContainer);
             if (style.display === 'none') {

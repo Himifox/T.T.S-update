@@ -290,7 +290,10 @@ Live2DManager.prototype.setupDragAndDrop = function (model) {
         model.interactive = false;
         return;
     }
-    model.interactive = true;
+    model.interactive = !this.isLocked;
+    if ('eventMode' in model) {
+        model.eventMode = this.isLocked ? 'none' : 'static';
+    }
     // 移除 stage.hitArea = screen，避免阻挡背景点击
     // this.pixi_app.stage.interactive = true;
     // this.pixi_app.stage.hitArea = this.pixi_app.screen;
@@ -869,14 +872,16 @@ Live2DManager.prototype.enableMouseTracking = function (model, options = {}) {
                 const isMouseTrackingEnabled = this.isMouseTrackingEnabled ? this.isMouseTrackingEnabled() : (window.mouseTrackingEnabled !== false);
                 if (this.isFocusing) {
                     if (isMouseTrackingEnabled) {
-                        const sensitivity = Number.isFinite(Number(window.mouseTrackingSensitivity))
+                        const rawSensitivity = Number.isFinite(Number(window.mouseTrackingSensitivity))
                             ? Number(window.mouseTrackingSensitivity)
                             : 1.0;
-                        const centerX = window.innerWidth / 2;
-                        const centerY = window.innerHeight / 2;
-                        const focusX = centerX + (pointer.x - centerX) * sensitivity;
-                        const focusY = centerY + (pointer.y - centerY) * sensitivity;
-                        model.focus(focusX, focusY);
+                        const sensitivity = Math.min(Math.max(rawSensitivity, 0.1), 3.0);
+                        model.focus(pointer.x, pointer.y);
+                        if (model.internalModel && model.internalModel.focusController) {
+                            const fc = model.internalModel.focusController;
+                            fc.targetX = Math.min(Math.max(fc.targetX * sensitivity, -1), 1);
+                            fc.targetY = Math.min(Math.max(fc.targetY * sensitivity, -1), 1);
+                        }
                     } else {
                         // 鼠标跟踪禁用时，清除 focusController 外部输入
                         // 头部仍可按 updateNaturalMovements（呼吸、轻微摆动等）自主运动，
@@ -1020,7 +1025,7 @@ Live2DManager.prototype._playTemporaryClickEffect = async function(emotion, prio
             const choiceFile = this.getRandomElement(expressionFiles);
             if (choiceFile && typeof this.playExpression === 'function') {
                 console.log(`[ClickEffect] 播放临时表情: ${choiceFile}`);
-                await this.playExpression(emotion, choiceFile);
+                await this.playExpression(emotion, choiceFile, { autoReset: false });
             }
         } else {
             console.log("[ClickEffect] 没找到可用表情")

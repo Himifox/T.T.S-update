@@ -38,7 +38,7 @@ function _getActiveModelType() {
 }
 
 // 1. 表情控制 (setEmotion / playExpression)
-window.LanLan1.setEmotion = function(emotion) {
+window.LanLan1.setEmotion = function(emotion, options = {}) {
     const activeType = _getActiveModelType();
     if (activeType === 'mmd') {
         if (window.mmdManager && window.mmdManager.expression) {
@@ -54,7 +54,7 @@ window.LanLan1.setEmotion = function(emotion) {
     }
     // Live2D 模式
     if (window.live2dManager && window.live2dManager.currentModel) {
-        window.live2dManager.setEmotion(emotion);
+        window.live2dManager.setEmotion(emotion, options);
     }
 };
 

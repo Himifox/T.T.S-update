@@ -641,6 +641,21 @@ class Live2DManager {
         // 1. 更新状态
         this.isLocked = locked;
 
+        // 同步 PIXI 模型本身的交互状态。主页上若有层级或样式覆盖
+        // canvas 的 pointer-events，模型事件仍可能继续响应拖拽。
+        if (this.currentModel) {
+            this.currentModel.interactive = !locked;
+            if ('eventMode' in this.currentModel) {
+                this.currentModel.eventMode = locked ? 'none' : 'static';
+            }
+        }
+        if (locked) {
+            this._isDraggingModel = false;
+            if (window.DragHelpers && typeof window.DragHelpers.restoreButtonPointerEvents === 'function') {
+                window.DragHelpers.restoreButtonPointerEvents();
+            }
+        }
+
         // 2. 更新锁图标样式（使用存储的引用，避免每次 querySelector）
         if (this._lockIconImages) {
             const { locked: imgLocked, unlocked: imgUnlocked } = this._lockIconImages;
@@ -652,7 +667,23 @@ class Live2DManager {
         const container = document.getElementById('live2d-canvas');
         if (container) {
             container.style.pointerEvents = locked ? 'none' : 'auto';
+            if (locked) {
+                container.style.cursor = '';
+            }
         }
+
+        const ensureLockIconClickable = () => {
+            const lockIcon = document.getElementById('live2d-lock-icon');
+            if (lockIcon) {
+                lockIcon.style.setProperty('pointer-events', 'auto', 'important');
+                lockIcon.style.cursor = 'pointer';
+                if (lockIcon.dataset.tutorialDisabled) {
+                    delete lockIcon.dataset.tutorialDisabled;
+                }
+            }
+        };
+        ensureLockIconClickable();
+        requestAnimationFrame(ensureLockIconClickable);
 
         if (!locked) {
             const live2dContainer = document.getElementById('live2d-container');
@@ -665,7 +696,17 @@ class Live2DManager {
         if (updateFloatingButtons) {
             const floatingButtons = document.getElementById('live2d-floating-buttons');
             if (floatingButtons) {
-                floatingButtons.style.display = locked ? 'none' : 'flex';
+                if (locked) {
+                    floatingButtons.style.setProperty('display', 'none', 'important');
+                    floatingButtons.style.setProperty('visibility', 'hidden', 'important');
+                    floatingButtons.style.setProperty('opacity', '0', 'important');
+                    floatingButtons.style.setProperty('pointer-events', 'none', 'important');
+                } else {
+                    floatingButtons.style.setProperty('display', 'flex', 'important');
+                    floatingButtons.style.setProperty('visibility', 'visible', 'important');
+                    floatingButtons.style.setProperty('opacity', '1', 'important');
+                    floatingButtons.style.setProperty('pointer-events', 'auto', 'important');
+                }
             }
         }
     }

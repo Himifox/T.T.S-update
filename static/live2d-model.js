@@ -1526,7 +1526,7 @@ Live2DManager.prototype._configureLoadedModel = async function(model, modelPath,
     if (hasIdleInEmotionMapping || hasIdleInFileReferences) {
         try {
             console.log('[Live2D Model] 模型淡入完成，开始播放Idle情绪');
-            this.setEmotion('Idle').catch(error => {
+            this.setEmotion('Idle', { autoReset: false }).catch(error => {
                 console.warn('[Live2D Model] 播放Idle情绪失败:', error);
             });
         } catch (error) {
