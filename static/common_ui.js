@@ -17,6 +17,14 @@ let applyChatContainerSize = null;
 let restoreChatContainerSize = null;
 let getStoredChatContainerSize = null;
 
+function notifyChatContainerPositionChange() {
+    if (window.AvatarLockIconPosition && typeof window.AvatarLockIconPosition.notify === 'function') {
+        window.AvatarLockIconPosition.notify();
+        return;
+    }
+    window.dispatchEvent(new CustomEvent('chat-container-position-change'));
+}
+
 // 移动端检测（与 live2d.js 的 isMobileWidth 一致：基于窗口宽度）
 function uiIsMobileWidth() {
     return window.innerWidth <= 768;
@@ -171,6 +179,7 @@ function setupResizableChatContainer() {
         chatContainer.style.width = `${clamped.width}px`;
         chatContainer.style.height = `${clamped.height}px`;
         chatContainer.style.maxHeight = `${clamped.height}px`;
+        notifyChatContainerPositionChange();
         return clamped;
     };
     // 持久化容器尺寸到 localStorage
@@ -234,6 +243,7 @@ function setupResizableChatContainer() {
         // chat-container 采用 bottom 定位；同步调整 bottom 让垂直拉伸表现为“向下展开”
         const consumedDeltaY = applied.height - startHeight;
         chatContainer.style.bottom = `${Math.max(0, startBottom - consumedDeltaY)}px`;
+        notifyChatContainerPositionChange();
         e.preventDefault();
     };
     // 处理调整大小结束事件
@@ -605,6 +615,7 @@ if (toggleBtn) {
     function applyChatContainerPosition(left, bottom) {
         chatContainer.style.left = `${left}px`;
         chatContainer.style.bottom = `${bottom}px`;
+        notifyChatContainerPositionChange();
     }
 
     // 聊天框拖动动画
@@ -766,6 +777,7 @@ if (toggleBtn) {
 
         chatContainer.style.left = Math.max(0, Math.min(maxLeft, newLeft)) + 'px';
         chatContainer.style.bottom = Math.max(0, Math.min(maxBottom, newBottom)) + 'px';
+        notifyChatContainerPositionChange();
     }
 
     // 结束拖动

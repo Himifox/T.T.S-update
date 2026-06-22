@@ -64,11 +64,14 @@ Live2DManager.prototype.setupHTMLLockIcon = function(model) {
             window.removeEventListener('resize', this._lockIconPositionHandler);
             this._lockIconPositionHandler = null;
         }
+        if (this._lockIconPositionCleanup) {
+            this._lockIconPositionCleanup();
+            this._lockIconPositionCleanup = null;
+        }
         existingLockIcon.remove();
     }
 
-    const chatWrapper = document.getElementById('chat-content-wrapper') || document.getElementById('chat-container');
-    if (!chatWrapper) {
+    if (!document.getElementById('chat-container')) {
         this.isLocked = false;
         container.style.pointerEvents = 'auto';
         return;
@@ -97,18 +100,17 @@ Live2DManager.prototype.setupHTMLLockIcon = function(model) {
     });
 
     const updateLockIconPosition = () => {
-        const rect = chatWrapper.getBoundingClientRect();
-        const left = Math.max(8, Math.min(rect.right - 48, window.innerWidth - 44));
-        const top = Math.max(8, Math.min(rect.bottom - 48, window.innerHeight - 44));
-        lockIcon.style.left = `${left}px`;
-        lockIcon.style.top = `${top}px`;
+        if (window.AvatarLockIconPosition && typeof window.AvatarLockIconPosition.place === 'function') {
+            window.AvatarLockIconPosition.place(lockIcon, { size: 36, gap: 8 });
+            return;
+        }
+
+        const rect = document.getElementById('chat-container').getBoundingClientRect();
+        const left = Math.max(8, Math.min(rect.right + 8, window.innerWidth - 44));
+        const top = Math.max(8, Math.min(rect.top + (rect.height - 36) / 2, window.innerHeight - 44));
+        lockIcon.style.left = `${Math.round(left)}px`;
+        lockIcon.style.top = `${Math.round(top)}px`;
     };
-    updateLockIconPosition();
-    window.addEventListener('resize', updateLockIconPosition);
-    if (this._lockIconPositionHandler) {
-        window.removeEventListener('resize', this._lockIconPositionHandler);
-    }
-    this._lockIconPositionHandler = updateLockIconPosition;
 
     const iconVersion = '?v=' + Date.now();
 
@@ -156,6 +158,14 @@ Live2DManager.prototype.setupHTMLLockIcon = function(model) {
     lockIcon.appendChild(imgContainer);
 
     document.body.appendChild(lockIcon);
+    if (window.AvatarLockIconPosition && typeof window.AvatarLockIconPosition.bind === 'function') {
+        this._lockIconPositionCleanup = window.AvatarLockIconPosition.bind(lockIcon, { size: 36, gap: 8 });
+        this._lockIconPositionHandler = null;
+    } else {
+        updateLockIconPosition();
+        window.addEventListener('resize', updateLockIconPosition);
+        this._lockIconPositionHandler = updateLockIconPosition;
+    }
     this._lockIconElement = lockIcon;
     this._lockIconImages = {
         locked: imgLocked,

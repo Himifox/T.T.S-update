@@ -6,6 +6,126 @@
  *   AvatarButtonMixin.apply(XXXManager.prototype, 'xxx', { options });
  */
 
+if (!window.AvatarLockIconPosition) {
+    window.AvatarLockIconPosition = (() => {
+        const EVENT_NAME = 'chat-container-position-change';
+        const DEFAULT_OPTIONS = {
+            size: 32,
+            gap: 8,
+            margin: 8
+        };
+
+        const getChatAnchorRect = () => {
+            const chatContainer = document.getElementById('chat-container');
+            if (!chatContainer) return null;
+
+            const toggleBtn = document.getElementById('toggle-chat-btn');
+            const isCollapsed = chatContainer.classList.contains('minimized') ||
+                chatContainer.classList.contains('mobile-collapsed');
+
+            if (isCollapsed && toggleBtn) {
+                const toggleRect = toggleBtn.getBoundingClientRect();
+                if (toggleRect.width > 0 && toggleRect.height > 0) return toggleRect;
+            }
+
+            const rect = chatContainer.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return null;
+            return rect;
+        };
+
+        const getIconSize = (lockIcon, options) => {
+            const configuredSize = Number(options.size);
+            if (Number.isFinite(configuredSize) && configuredSize > 0) return configuredSize;
+
+            const rect = lockIcon.getBoundingClientRect();
+            if (rect.width > 0) return rect.width;
+
+            const styleWidth = parseFloat(lockIcon.style.width);
+            return Number.isFinite(styleWidth) && styleWidth > 0 ? styleWidth : DEFAULT_OPTIONS.size;
+        };
+
+        const place = (lockIcon, options = {}) => {
+            if (!lockIcon || !document.body.contains(lockIcon)) return false;
+
+            const opts = Object.assign({}, DEFAULT_OPTIONS, options);
+            const chatRect = getChatAnchorRect();
+            if (!chatRect) return false;
+
+            const size = getIconSize(lockIcon, opts);
+            const gap = Number.isFinite(Number(opts.gap)) ? Number(opts.gap) : DEFAULT_OPTIONS.gap;
+            const margin = Number.isFinite(Number(opts.margin)) ? Number(opts.margin) : DEFAULT_OPTIONS.margin;
+
+            const preferredOutsideLeft = chatRect.right + gap;
+            const fallbackInsideLeft = chatRect.right - size - gap;
+            const canUseOutside = preferredOutsideLeft + size <= window.innerWidth - margin;
+            const rawLeft = canUseOutside ? preferredOutsideLeft : fallbackInsideLeft;
+            const rawTop = chatRect.top + (chatRect.height - size) / 2;
+
+            const maxLeft = Math.max(margin, window.innerWidth - size - margin);
+            const maxTop = Math.max(margin, window.innerHeight - size - margin);
+            const left = Math.max(margin, Math.min(rawLeft, maxLeft));
+            const top = Math.max(margin, Math.min(rawTop, maxTop));
+
+            lockIcon.style.left = `${Math.round(left)}px`;
+            lockIcon.style.top = `${Math.round(top)}px`;
+            return true;
+        };
+
+        const bind = (lockIcon, options = {}) => {
+            let rafId = null;
+            let mutationObserver = null;
+            let resizeObserver = null;
+
+            const schedule = () => {
+                if (rafId !== null) return;
+                rafId = requestAnimationFrame(() => {
+                    rafId = null;
+                    place(lockIcon, options);
+                });
+            };
+
+            window.addEventListener('resize', schedule);
+            window.addEventListener(EVENT_NAME, schedule);
+
+            const chatContainer = document.getElementById('chat-container');
+            const toggleBtn = document.getElementById('toggle-chat-btn');
+
+            if (chatContainer && window.MutationObserver) {
+                mutationObserver = new MutationObserver(schedule);
+                mutationObserver.observe(chatContainer, {
+                    attributes: true,
+                    attributeFilter: ['style', 'class']
+                });
+            }
+
+            if (window.ResizeObserver) {
+                resizeObserver = new ResizeObserver(schedule);
+                if (chatContainer) resizeObserver.observe(chatContainer);
+                if (toggleBtn) resizeObserver.observe(toggleBtn);
+            }
+
+            schedule();
+
+            return () => {
+                if (rafId !== null) {
+                    cancelAnimationFrame(rafId);
+                    rafId = null;
+                }
+                window.removeEventListener('resize', schedule);
+                window.removeEventListener(EVENT_NAME, schedule);
+                if (mutationObserver) mutationObserver.disconnect();
+                if (resizeObserver) resizeObserver.disconnect();
+            };
+        };
+
+        const notify = () => {
+            window.dispatchEvent(new CustomEvent(EVENT_NAME));
+        };
+
+        return { bind, notify, place };
+    })();
+}
+
 const AvatarButtonMixin = {
     /**
      * 应用按钮 mixin 到指定的 Manager 类
@@ -55,6 +175,10 @@ const AvatarButtonMixin = {
                 document.removeEventListener('touchmove', this._returnButtonDragHandlers.touchMove);
                 document.removeEventListener('touchend', this._returnButtonDragHandlers.touchEnd);
                 this._returnButtonDragHandlers = null;
+            }
+            if (this._lockIconPositionCleanup) {
+                this._lockIconPositionCleanup();
+                this._lockIconPositionCleanup = null;
             }
 
             // 清理旧 DOM
@@ -764,6 +888,10 @@ const AvatarButtonMixin = {
                 document.removeEventListener('touchmove', this._returnButtonDragHandlers.touchMove);
                 document.removeEventListener('touchend', this._returnButtonDragHandlers.touchEnd);
                 this._returnButtonDragHandlers = null;
+            }
+            if (this._lockIconPositionCleanup) {
+                this._lockIconPositionCleanup();
+                this._lockIconPositionCleanup = null;
             }
 
             if (this._physicsRestoreTimer) {

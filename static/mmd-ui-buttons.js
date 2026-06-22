@@ -328,6 +328,9 @@ MMDManager.prototype.setupFloatingButtons = function() {
         backgroundSize: 'contain', backgroundRepeat: 'no-repeat', backgroundPosition: 'center',
         pointerEvents: 'auto', transition: 'transform 0.1s'
     });
+    if (window.AvatarLockIconPosition && typeof window.AvatarLockIconPosition.bind === 'function') {
+        this._lockIconPositionCleanup = window.AvatarLockIconPosition.bind(lockIcon, { size: 32, gap: 8 });
+    }
 
     const toggleLock = (e) => {
         if (e) { e.preventDefault(); e.stopPropagation(); }
@@ -534,32 +537,19 @@ MMDManager.prototype._startUIUpdateLoop = function() {
                     }
 
                     if (lockIcon && !this._isInReturnState) {
-                        const lockTargetX = canvasRect.left + visibleRight * 0.7 + visibleLeft * 0.3;
-                        const lockTargetY = canvasRect.top + visibleTop * 0.3 + visibleBottom * 0.7;
-
                         lockIcon.style.transformOrigin = 'center center';
-                        lockIcon.style.transform = `scale(${scale})`;
+                        lockIcon.style.transform = 'scale(1)';
 
-                        const baseLockIconSize = 32;
-                        const actualLockIconSize = baseLockIconSize * scale;
-                        const maxLockX = screenWidth - actualLockIconSize;
-                        const maxLockY = screenHeight - actualLockIconSize - 20;
-                        const boundedLockX = Math.max(0, Math.min(lockTargetX, maxLockX));
-                        const boundedLockY = Math.max(20, Math.min(lockTargetY, maxLockY));
-
-                        const rawLockLeft = parseFloat(lockIcon.style.left);
-                        if (Number.isNaN(rawLockLeft)) {
-                            if (canvasWidth > 0 && canvasHeight > 0) {
-                                lockIcon.style.left = `${boundedLockX}px`;
-                                lockIcon.style.top = `${boundedLockY}px`;
-                            }
+                        if (window.AvatarLockIconPosition && typeof window.AvatarLockIconPosition.place === 'function') {
+                            window.AvatarLockIconPosition.place(lockIcon, { size: 32, gap: 8 });
                         } else {
-                            const currentLockTop = parseFloat(lockIcon.style.top) || boundedLockY;
-                            const lockDist = Math.sqrt(Math.pow(boundedLockX - rawLockLeft, 2) + Math.pow(boundedLockY - currentLockTop, 2));
-                            if (lockDist > 0.5) {
-                                const lerpFactor = 0.15;
-                                lockIcon.style.left = `${rawLockLeft + (boundedLockX - rawLockLeft) * lerpFactor}px`;
-                                lockIcon.style.top = `${currentLockTop + (boundedLockY - currentLockTop) * lerpFactor}px`;
+                            const chatContainer = document.getElementById('chat-container');
+                            if (chatContainer) {
+                                const chatRect = chatContainer.getBoundingClientRect();
+                                const fallbackLeft = Math.max(8, Math.min(chatRect.right + 8, screenWidth - 40));
+                                const fallbackTop = Math.max(8, Math.min(chatRect.top + (chatRect.height - 32) / 2, screenHeight - 40));
+                                lockIcon.style.left = `${Math.round(fallbackLeft)}px`;
+                                lockIcon.style.top = `${Math.round(fallbackTop)}px`;
                             }
                         }
                         lockIcon.style.display = (this._shouldShowMmdLockIcon && this._shouldShowMmdLockIcon()) ? 'block' : 'none';
