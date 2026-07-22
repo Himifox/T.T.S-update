@@ -578,7 +578,9 @@ Live2DManager.prototype.playExpression = async function(emotion, specifiedExpres
                 
                 const expression = await this.currentModel.expression(expressionName);
                 if (expression) {
-                    if (options.autoReset !== false) {
+                    if (options.autoReset === false) {
+                        this._clearExpressionAutoResetTimer();
+                    } else {
                         this._scheduleExpressionAutoReset(options.durationMs, `expression:${emotion}`);
                     }
                     console.log(`成功使用原生API播放expression: ${expressionName}`);
@@ -596,7 +598,9 @@ Live2DManager.prototype.playExpression = async function(emotion, specifiedExpres
         if (expressionData.Parameters && expressionData.Parameters.length > 0) {
             // 使用 _installManualExpressionOverride 在每帧中持续应用参数，并带有淡入效果
             this._installManualExpressionOverride(expressionData.Parameters, 300);
-            if (options.autoReset !== false) {
+            if (options.autoReset === false) {
+                this._clearExpressionAutoResetTimer();
+            } else {
                 this._scheduleExpressionAutoReset(options.durationMs, `expression:${emotion}`);
             }
         }
@@ -674,6 +678,23 @@ Live2DManager.prototype._selectEmotionMotion = function(emotion) {
     return motions.length > 0 ? this.getRandomElement(motions) : null;
 };
 
+Live2DManager.prototype._getMotionEntryAt = function(groupName, index) {
+    if (!groupName || !Number.isInteger(index) || index < 0) return null;
+
+    const sources = [
+        this.fileReferences && this.fileReferences.Motions,
+        this.currentModel?.internalModel?.motionManager?.definitions,
+        this.currentModel?.internalModel?.settings?.motions
+    ];
+    for (const source of sources) {
+        const motions = source && source[groupName];
+        if (!Array.isArray(motions) || !motions[index]) continue;
+        const entry = this._normalizeMotionEntry(motions[index]);
+        if (entry) return entry;
+    }
+    return null;
+};
+
 Live2DManager.prototype._ensureRuntimeMotionGroup = function(groupName, motions) {
     const internalModel = this.currentModel && this.currentModel.internalModel;
     const motionManager = internalModel && internalModel.motionManager;
@@ -716,11 +737,14 @@ Live2DManager.prototype._findMotionPlaybackRef = function(filePath, preferredGro
     const findInGroup = (source, groupName) => {
         const list = source && source[groupName];
         if (!Array.isArray(list)) return null;
-        if (Number.isInteger(preferredIndex) && list[preferredIndex] && this._sameMotionFile(list[preferredIndex].File, target)) {
-            return { groupName, index: preferredIndex, motions: list };
+        if (Number.isInteger(preferredIndex) && list[preferredIndex]) {
+            const preferred = this._normalizeMotionEntry(list[preferredIndex]);
+            if (preferred && this._sameMotionFile(preferred.File, target)) {
+                return { groupName, index: preferredIndex, motions: list };
+            }
         }
         for (let index = 0; index < list.length; index++) {
-            const item = list[index];
+            const item = this._normalizeMotionEntry(list[index]);
             if (item && this._sameMotionFile(item.File, target)) {
                 return { groupName, index, motions: list };
             }
@@ -881,15 +905,37 @@ Live2DManager.prototype._restoreBaseMotion = async function() {
     return false;
 };
 
-Live2DManager.prototype.playMotion = async function(emotion, options = {}) {
+Live2DManager.prototype.playMotion = async function(emotion, options = {}, legacyPriority) {
     if (!this.currentModel) {
         console.warn('无法播放动作：模型未加载');
         return false;
     }
 
-    const choice = options.motionEntry || this._selectEmotionMotion(emotion);
+    let resolvedOptions = options;
+    if (typeof options === 'number') {
+        resolvedOptions = {
+            groupName: emotion,
+            index: options,
+            priority: Number.isFinite(legacyPriority) ? legacyPriority : 3,
+            temporary: true,
+            restoreBase: true,
+            loop: false
+        };
+    } else if (!options || typeof options !== 'object' || Array.isArray(options)) {
+        resolvedOptions = {};
+    }
+
+    const exactMotionRequested = !!resolvedOptions.groupName && Number.isInteger(resolvedOptions.index);
+    const choice = resolvedOptions.motionEntry || (exactMotionRequested
+        ? this._getMotionEntryAt(resolvedOptions.groupName, resolvedOptions.index)
+        : this._selectEmotionMotion(emotion));
     if (!choice || !choice.File) {
-        console.warn(`未找到情感 ${emotion} 对应的动作，但将保持表情`);
+        if (exactMotionRequested) {
+            console.warn(`未找到指定motion: ${resolvedOptions.groupName}[${resolvedOptions.index}]`);
+            if (resolvedOptions.restoreBase !== false) await this._restoreBaseMotion();
+        } else {
+            console.warn(`未找到情感 ${emotion} 对应的动作，但将保持表情`);
+        }
         return false;
     }
 
@@ -899,13 +945,15 @@ Live2DManager.prototype.playMotion = async function(emotion, options = {}) {
         const motionDuration = await this._getMotionDurationMs(normalizedFile, 5000);
         const playback = await this._playMotionFile(choice, {
             emotion,
-            priority: Number.isFinite(options.priority) ? options.priority : 3,
-            loop: options.loop === true
+            groupName: resolvedOptions.groupName,
+            index: resolvedOptions.index,
+            priority: Number.isFinite(resolvedOptions.priority) ? resolvedOptions.priority : 3,
+            loop: resolvedOptions.loop === true
         });
 
         if (!playback) {
             console.warn(`无法播放motion文件: ${choice.File}`);
-            if (options.restoreBase !== false) await this._restoreBaseMotion();
+            if (resolvedOptions.restoreBase !== false) await this._restoreBaseMotion();
             return false;
         }
 
@@ -915,17 +963,17 @@ Live2DManager.prototype.playMotion = async function(emotion, options = {}) {
             groupName: playback.groupName,
             index: playback.index,
             priority: playback.priority,
-            temporary: options.temporary !== false
+            temporary: resolvedOptions.temporary !== false
         };
 
         console.log(`成功播放motion文件: ${playback.file} (${playback.groupName}[${playback.index}])，持续 ${motionDuration}ms`);
 
-        if (options.temporary !== false) {
+        if (resolvedOptions.temporary !== false) {
             this.motionTimer = setTimeout(async () => {
                 console.log(`临时motion播放完成: ${playback.file}，恢复基础动态`);
                 this.motionTimer = null;
                 this._activeMotionState = null;
-                if (options.restoreBase !== false) {
+                if (resolvedOptions.restoreBase !== false) {
                     await this._restoreBaseMotion();
                 }
             }, motionDuration);
@@ -934,7 +982,7 @@ Live2DManager.prototype.playMotion = async function(emotion, options = {}) {
         return true;
     } catch (error) {
         console.error('播放动作失败:', error);
-        if (options.restoreBase !== false) await this._restoreBaseMotion();
+        if (resolvedOptions.restoreBase !== false) await this._restoreBaseMotion();
         return false;
     }
 };

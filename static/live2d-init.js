@@ -69,7 +69,7 @@ window.LanLan1.playMotion = function(group, no, priority) {
 
     // Live2D 模式
     if (window.live2dManager && window.live2dManager.currentModel) {
-        window.live2dManager.playMotion(group, no, priority);
+        return window.live2dManager.playMotion(group, no, priority);
     }
 };
 

@@ -1988,7 +1988,7 @@ Live2DManager.prototype._playTouchSetAnimation = async function(hitAreaId) {
             }else {
                 console.log(`[TouchSet] 尝试播放表情: ${faceInfo.File}`);
                 try {
-                    await this.playExpression(randomExpressionName, faceInfo.File);
+                    await this.playExpression(randomExpressionName, faceInfo.File, { autoReset: false });
                     console.log(`[TouchSet] 播放表情成功: ${randomExpressionName}, 持续时间: ${faceHoldingTime}ms`);
                     
                 } catch (e) {
